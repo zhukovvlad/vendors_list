@@ -1,0 +1,10 @@
+# Нормализация переводов строк: в репозитории — LF, в рабочей копии Git решает
+# сам по ОС. Бинарные ассеты не трогаем.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.xlsx binary

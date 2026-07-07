@@ -1,0 +1,155 @@
+"""Pydantic v2 схемы запросов/ответов.
+
+Ответы повторяют колонки готовых объектов БД (вьюх/таблиц). Бизнес-логику
+статусов/звезды НЕ дублируем — приходит из БД как есть.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Generic, TypeVar
+
+from pydantic import BaseModel, ConfigDict, Field
+
+_from_row = ConfigDict(from_attributes=True)
+
+
+# --- Справочники / мета ------------------------------------------------------
+class BuildingType(BaseModel):
+    model_config = _from_row
+    id: int
+    code: str
+    name: str
+    sort_order: int
+
+
+class Segment(BaseModel):
+    model_config = _from_row
+    id: int
+    building_type_id: int
+    group_id: int | None
+    name: str
+    sort_order: int
+
+
+# --- Живой перечень (listing_live) ------------------------------------------
+class ListingRow(BaseModel):
+    model_config = _from_row
+    id: int
+    position_id: int
+    segment_id: int
+    vendor_id: int | None
+    status: str
+    spec_text: str | None
+    ujin_integration: bool
+    note: str | None
+    sort_order: int
+    category_path: str | None
+    position_name: str
+    segment_group_name: str | None
+    segment_name: str
+    vendor_name: str | None
+    vendor_starred: bool
+    updated_at: datetime
+    updated_by: str
+
+
+T = TypeVar("T")
+
+
+class Page(BaseModel, Generic[T]):
+    """Обёртка серверной пагинации для таблиц (TanStack Table)."""
+
+    items: list[T]
+    total: int
+    limit: int
+    offset: int
+
+
+# --- Издания (release_listing) ----------------------------------------------
+class ReleaseListingRow(BaseModel):
+    model_config = _from_row
+    id: int
+    release_id: int
+    position_id: int | None
+    segment_id: int | None
+    vendor_id: int | None
+    status: str
+    spec_text: str | None
+    ujin_integration: bool
+    note: str | None
+    sort_order: int
+    category_path: str | None
+    position_name: str | None
+    segment_group_name: str | None
+    segment_name: str | None
+    vendor_name: str | None
+    vendor_starred: bool
+
+
+# --- Соответствие ------------------------------------------------------------
+class PositionStatus(BaseModel):
+    model_config = _from_row
+    project_id: int
+    project_code: str
+    position_id: int
+    category_path: str | None
+    position_name: str
+    allowed_vendor_count: int
+    selected_vendor_count: int
+    off_standard_count: int
+    in_standard_selected_count: int
+    has_selection: bool
+    in_standard_scope: bool
+    standard_requirement: str | None
+    position_state: str  # compliant | deviation | manual_check | open
+
+
+class ProjectSummary(BaseModel):
+    model_config = _from_row
+    project_id: int
+    project_code: str
+    total_positions: int
+    compliant_positions: int
+    deviation_positions: int
+    manual_check_positions: int
+    open_positions: int
+    judged_positions: int
+    off_standard_selections: int
+    compliance_pct: float | None
+
+
+# --- Проекты и выбор вендоров ------------------------------------------------
+class Project(BaseModel):
+    model_config = _from_row
+    id: int
+    code: str
+    name: str
+    segment_id: int
+    release_id: int | None
+    note: str | None
+
+
+class ProjectCreate(BaseModel):
+    code: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    segment_id: int
+    release_id: int | None = None
+    note: str | None = None
+
+
+class SelectionCreate(BaseModel):
+    position_id: int
+    vendor_id: int
+    rationale: str | None = None
+    source_ref: str | None = None
+
+
+class Selection(BaseModel):
+    model_config = _from_row
+    id: int
+    project_id: int
+    position_id: int
+    vendor_id: int
+    rationale: str | None
+    source_ref: str | None

@@ -1,0 +1,10 @@
+node_modules/
+coverage/
+.pnpm-store/
+pnpm-lock.yaml
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Сгенерированные артефакты (перегенерируются, форматировать не нужно)
+src/api/schema.d.ts
