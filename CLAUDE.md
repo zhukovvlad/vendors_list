@@ -68,6 +68,8 @@ just ci            # все проверки: types, lint, typecheck, test
 - `frontend/src/api/` — типизированный клиент (`client.ts`) и хуки Query (`queries.ts`);
   тесты — `*.test.ts(x)` рядом с кодом (vitest).
 - `docs/` — [ARCHITECTURE.md](docs/ARCHITECTURE.md), [DEVELOPMENT.md](docs/DEVELOPMENT.md),
+  [TECH_DEBT.md](docs/TECH_DEBT.md) (реестр осознанно отложенных доработок —
+  проверять перед новым срезом и пополнять при отложенных компромиссах),
   [devlog/](docs/devlog/) (хронология работ, файл на задачу — читать при возврате к проекту).
 - `temp/` — исходные Excel (3 перечня) и дизайн-хендофф (не трогать без нужды).
 
