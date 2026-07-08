@@ -11,6 +11,9 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
@@ -22,8 +25,32 @@ jobs:
         run: uv run ruff check .
       - name: Types (mypy)
         run: uv run mypy app
+      - name: Create Neon test branch
+        id: neon
+        if: ${{ env.NEON_API_KEY != '' }}
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent: production
+          branch_name: ci-${{ github.run_id }}-${{ github.run_attempt }}
+          api_key: ${{ env.NEON_API_KEY }}
+      - name: Migrate test branch
+        if: ${{ steps.neon.outcome == 'success' }}
+        env:
+          MIGRATE_TARGET: test
+          DATABASE_URL_TEST: ${{ steps.neon.outputs.db_url_pooled }}?ssl=require
+        run: uv run alembic upgrade head
       - name: Tests (pytest)
+        env:
+          DATABASE_URL_TEST: ${{ steps.neon.outputs.db_url_pooled != '' && format('{0}?ssl=require', steps.neon.outputs.db_url_pooled) || '' }}
         run: uv run pytest -q
+      - name: Delete Neon test branch
+        if: ${{ always() && steps.neon.outcome == 'success' }}
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ci-${{ github.run_id }}-${{ github.run_attempt }}
+          api_key: ${{ env.NEON_API_KEY }}
       - name: Export OpenAPI
         run: uv run python -m scripts.export_openapi
       - name: Upload OpenAPI schema
@@ -59,5 +86,7 @@ jobs:
         run: npm run format:check
       - name: Typecheck (tsc)
         run: npm run typecheck
+      - name: Tests (vitest)
+        run: npm run test
       - name: Build
         run: npm run build

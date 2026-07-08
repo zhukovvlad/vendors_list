@@ -82,9 +82,10 @@ typecheck:
     cd {{backend}}; uv run mypy app
     cd {{frontend}}; npm run typecheck
 
-# Тесты бэкенда (pytest). Тесты фронта (vitest) — TODO, пока не заведены.
+# Тесты: бэкенд (pytest, db-тесты скипаются без DATABASE_URL_TEST) + фронт (vitest).
 test:
     cd {{backend}}; uv run pytest
+    cd {{frontend}}; npm run test
 
 # Production-сборка фронтенда.
 build:
