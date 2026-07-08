@@ -62,7 +62,7 @@ just ci            # все проверки: types, lint, typecheck, test
 - `backend/migrations/` — Alembic; `sql/` — два канонических SQL-файла.
 - `frontend/src/api/` — типизированный клиент (`client.ts`) и хуки Query (`queries.ts`).
 - `docs/` — [ARCHITECTURE.md](docs/ARCHITECTURE.md), [DEVELOPMENT.md](docs/DEVELOPMENT.md),
-  [DEVLOG.md](docs/DEVLOG.md) (хронология работ — читать при возврате к проекту).
+  [devlog/](docs/devlog/) (хронология работ, файл на задачу — читать при возврате к проекту).
 - `temp/` — исходные Excel (3 перечня) и дизайн-хендофф (не трогать без нужды).
 
 ## Порядок работ (из ТЗ §5) — где мы
