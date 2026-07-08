@@ -19,7 +19,8 @@
 - **db-тесты помечены маркером `db`**; при пустом `DATABASE_URL_TEST` — скипаются (локальный `just ci` без тест-базы остаётся зелёным).
 - **Инвертированный TDD для db-тестов:** проверяемая логика (вьюхи/функции/триггеры) уже существует в БД. Тест пишем и ждём **PASS с первого прогона**; FAIL означает ошибку в тесте или в нашем понимании схемы — разбираемся, не «чиним» БД.
 - **PowerShell на Windows:** `just` — локально; в CI (ubuntu) `just` НЕ вызывать, alembic/pytest звать напрямую через `uv run`.
-- **Проверенные факты схемы** (сверено с `0001`/`0002`): `current_app_user() = coalesce(nullif(current_setting('app.user',true),''), current_user)` — при незаданном `app.user` возвращает роль БД (NOT NULL полей `created_by` не нарушает). Валидные комбинации `listing`: `allowed`→vendor+нет spec_text; `requirement`→нет vendor+spec_text; `not_applicable`/`undefined`→нет vendor. Ячейка `(position_id,segment_id)` — либо вендоры, либо одна мета-строка. Светофор: `manual_check` если нет списка allowed; `open` если список есть, выбора нет; `deviation` если есть вендор вне списка; иначе `compliant`. `compliance_pct = 🟢/(🟢+🔴)`, NULL если судить нечего.
+- **Проверенные факты схемы** (сверено с `0001`/`0002`): `current_app_user() = coalesce(nullif(current_setting('app.user',true),''), current_user)` — при незаданном `app.user` возвращает роль БД (NOT NULL полей `created_by` не нарушает). Валидные комбинации `listing`: `allowed`→vendor+нет spec_text; `requirement`→нет vendor+spec_text; `not_applicable`/`undefined`→нет vendor. Ячейка `(position_id,segment_id)` — либо вендоры, либо одна мета-строка. Светофор: `manual_check` если нет списка allowed; `open` если список есть, выбора нет; `deviation` если есть вендор вне списка (по `brand_key=coalesce(represents_id,id)`); иначе `compliant`. `compliance_pct = 🟢/(🟢+🔴)`, NULL если судить нечего.
+- **Пред-проверка перед db-тестами (Tasks 4-9):** т.к. `DATABASE_URL_TEST` задан, хук скипа НЕ сработает — db-тесты реально подключаются к ветке. До первого `pytest tests/db` убедиться, что ветка существует и она data+schema: `cd backend; uv run python -c "from app.config import get_settings as g; print(g().database_url_test)"` (после Task 2) и что `alembic_version=0002` (напр. проверочным скриптом). Иначе db-тесты упадут на соединении/схеме, а не «зелёные-по-скипу». *Проверено в сессии планирования: ветка `test` — data+schema, версия `0002_compliance`, сиды на месте (3 типа, 11 классов).*
 
 ---
 
@@ -131,15 +132,18 @@ def test_marker_is_registered() -> None:
     assert True
 ```
 
-- [ ] **Step 5: Прогнать — смоук проходит, db-тест скипается (URL пуст временно)**
+- [ ] **Step 5: Прогнать — маркер зарегистрирован и скип демонстрируется**
 
-Для проверки скипа временно убедиться, что `DATABASE_URL_TEST` не подхватывается (переименовать в `.env` в `DATABASE_URL_TEST_OFF` ЛИБО запустить из каталога без `.env`).
+Сначала с заданным `DATABASE_URL_TEST` (env-переменная и/или `.env`) — db-тест ВЫПОЛНЯЕТСЯ:
 
 Run: `cd backend; uv run pytest -v`
-Expected: `test_smoke.py` — 2 PASS; `test_marker_smoke.py::test_marker_is_registered` — SKIPPED (reason про DATABASE_URL_TEST). Предупреждений о неизвестном маркере нет.
+Expected: `test_smoke.py` — 2 PASS; `test_marker_smoke.py::test_marker_is_registered` — PASS; предупреждений о неизвестном маркере нет.
 
-Затем вернуть имя `DATABASE_URL_TEST` в `.env` и повторить:
-Expected: тот же тест — PASS (URL задан).
+Затем продемонстрировать скип, занулив `DATABASE_URL_TEST` на ОДИН прогон.
+Важно: значение может быть задано и как env-переменная, и в `.env`; env-переменная у pydantic-settings приоритетнее файла, поэтому переименование в `.env` скип НЕ покажет. Надёжно — задать env-переменную ПУСТОЙ (пустая приоритетнее `.env`, т.к. `env_ignore_empty=False` по умолчанию). Bash-форма `VAR= cmd` детерминирована (в отличие от PowerShell `$env:X=$null`/`''`, который удаляет переменную и роняет обратно в `.env`):
+
+Run (через Bash-tool): `cd backend && DATABASE_URL_TEST= uv run pytest -v`
+Expected: `test_marker_smoke.py::test_marker_is_registered` — SKIPPED (reason про DATABASE_URL_TEST); smoke — по-прежнему 2 PASS.
 
 - [ ] **Step 6: Удалить временный тест**
 
@@ -258,9 +262,33 @@ config.set_main_option("sqlalchemy.url", _url)
 DATABASE_URL_TEST=
 ```
 
-- [ ] **Step 7: Добавить рецепт `migrate-test` в justfile**
+- [ ] **Step 7: Защитить дефолтные alembic-рецепты и добавить `migrate-test`**
 
-В `justfile` после рецепта `migrate` (после строки 29) вставить:
+`just` порождает дочерний PowerShell, наследующий окружение сессии. Если в сессии
+остался экспортированный `MIGRATE_TARGET=test`, обычный `migrate`/`migrate-down`
+молча ушли бы на тест-ветку (пишущий/деструктивный путь). Намерение должен
+задавать рецепт, поэтому в дефолтных рецептах, подключающихся к БД, явно зануляем
+`MIGRATE_TARGET` (пустое → `env.py` берёт основной URL). `makemigration`/
+`migrate-history` к БД не подключаются — их не трогаем.
+
+В `justfile` заменить рецепты `migrate`, `migrate-down`, `migrate-current`:
+
+```
+migrate:
+    cd {{backend}}; $env:MIGRATE_TARGET=''; uv run alembic upgrade head
+```
+
+```
+migrate-down:
+    cd {{backend}}; $env:MIGRATE_TARGET=''; uv run alembic downgrade -1
+```
+
+```
+migrate-current:
+    cd {{backend}}; $env:MIGRATE_TARGET=''; uv run alembic current
+```
+
+И после рецепта `migrate` добавить новый `migrate-test`:
 
 ```
 # Накатить миграции на ТЕСТОВУЮ ветку (DATABASE_URL_TEST). На data+schema-ветке,
