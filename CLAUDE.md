@@ -29,6 +29,9 @@
 7. **В `main` не коммитить напрямую.** Любая работа — в отдельной ветке
    (`feat/...`, `fix/...`, `chore/...`), оттуда Pull Request в `main`. `main`
    держим всегда зелёным (проходит `just ci`). Мержим только через PR.
+   **Перед пушем — локальный `just ci`** (не ручной набор `npm run …`/`pytest`:
+   он недокомплектен относительно CI, напр. без `prettier --check`). Детали —
+   [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) §Проверки.
 
 ## Стек
 
@@ -68,6 +71,8 @@ just ci            # все проверки: types, lint, typecheck, test
 - `frontend/src/api/` — типизированный клиент (`client.ts`) и хуки Query (`queries.ts`);
   тесты — `*.test.ts(x)` рядом с кодом (vitest).
 - `docs/` — [ARCHITECTURE.md](docs/ARCHITECTURE.md), [DEVELOPMENT.md](docs/DEVELOPMENT.md),
+  [TECH_DEBT.md](docs/TECH_DEBT.md) (реестр осознанно отложенных доработок —
+  проверять перед новым срезом и пополнять при отложенных компромиссах),
   [devlog/](docs/devlog/) (хронология работ, файл на задачу — читать при возврате к проекту).
 - `temp/` — исходные Excel (3 перечня) и дизайн-хендофф (не трогать без нужды).
 
