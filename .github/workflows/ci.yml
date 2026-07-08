@@ -31,7 +31,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent: production
+          parent_branch: production
           branch_name: ci-${{ github.run_id }}-${{ github.run_attempt }}
           api_key: ${{ env.NEON_API_KEY }}
       - name: Migrate test branch
