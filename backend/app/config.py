@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     # Sync-URL для Alembic выводится из неё (см. database_url_sync). База одна.
     database_url: str = "postgresql+asyncpg://vendors:vendors@localhost:5432/vendors"
 
+    # Тестовая ветка Neon (data+schema). Пусто в prod/обычном dev; задаётся
+    # в backend/.env локально и в env CI-джобы. Драйвер asyncpg → хвост ssl=require.
+    database_url_test: str = ""
+
     cors_origins: str = "http://localhost:5173"
 
     # --- OIDC ---
@@ -40,6 +44,15 @@ class Settings(BaseSettings):
         psycopg. Хост/база/пользователь те же — БД одна.
         """
         url = self.database_url.replace("+asyncpg", "+psycopg")
+        return url.replace("ssl=require", "sslmode=require")
+
+    @property
+    def database_url_test_sync(self) -> str:
+        """Sync-URL (psycopg) для Alembic против тестовой ветки. Пусто, если
+        database_url_test не задан. Трансформация — как у database_url_sync."""
+        if not self.database_url_test:
+            return ""
+        url = self.database_url_test.replace("+asyncpg", "+psycopg")
         return url.replace("ssl=require", "sslmode=require")
 
     @property

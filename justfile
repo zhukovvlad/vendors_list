@@ -25,18 +25,26 @@ install:
     cd {{frontend}}; npm install
 
 # Применить миграции к БД (alembic upgrade head). Требует DATABASE_URL в backend/.env.
+# MIGRATE_TARGET явно зануляется: если в сессии остался экспортированный
+# MIGRATE_TARGET=test, этот рецепт всё равно должен идти в основную БД.
 migrate:
-    cd {{backend}}; uv run alembic upgrade head
+    cd {{backend}}; $env:MIGRATE_TARGET=''; uv run alembic upgrade head
+
+# Накатить миграции на ТЕСТОВУЮ ветку (DATABASE_URL_TEST). На data+schema-ветке,
+# унаследовавшей alembic_version от production, это no-op (применит только
+# реально новые ревизии). Прод не трогает.
+migrate-test:
+    cd {{backend}}; $env:MIGRATE_TARGET='test'; uv run alembic upgrade head
 
 # Откатить последнюю миграцию.
 migrate-down:
-    cd {{backend}}; uv run alembic downgrade -1
+    cd {{backend}}; $env:MIGRATE_TARGET=''; uv run alembic downgrade -1
 
 # История/статус миграций.
 migrate-history:
     cd {{backend}}; uv run alembic history --verbose
 migrate-current:
-    cd {{backend}}; uv run alembic current
+    cd {{backend}}; $env:MIGRATE_TARGET=''; uv run alembic current
 
 # ВНИМАНИЕ: в отличие от CIW здесь НЕТ --autogenerate — схемой владеет БД
 # (schema-first), правку пишем вручную через op.execute в созданной ревизии.
