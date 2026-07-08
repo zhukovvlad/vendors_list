@@ -497,11 +497,13 @@ async def make_selection(
 Дополнить `backend/tests/conftest.py` (добавить импорты и фикстуры; хук из Task 1 сохранить):
 
 ```python
+from collections.abc import AsyncIterator, Iterator
+
 import pytest_asyncio
 from fastapi import Depends
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.auth import CurrentUser, require_user
@@ -511,7 +513,7 @@ from app.main import app
 
 
 @pytest_asyncio.fixture
-async def engine():
+async def engine() -> AsyncIterator[AsyncEngine]:
     """Движок на тестовую ветку. NullPool — не держим соединения между тестами,
     заодно уходим от привязки пула к событийному циклу. statement_cache_size=0 —
     обязателен под транзакционный пулер Neon (как в app/db.py)."""
@@ -525,7 +527,7 @@ async def engine():
 
 
 @pytest_asyncio.fixture
-async def db_conn(engine) -> AsyncConnection:
+async def db_conn(engine: AsyncEngine) -> AsyncIterator[AsyncConnection]:
     """Соединение в откатываемой транзакции: всё, что тест пишет, исчезает в конце."""
     async with engine.connect() as conn:
         trans = await conn.begin()
@@ -536,7 +538,7 @@ async def db_conn(engine) -> AsyncConnection:
 
 
 @pytest_asyncio.fixture
-async def client(db_conn: AsyncConnection) -> AsyncClient:
+async def client(db_conn: AsyncConnection) -> AsyncIterator[AsyncClient]:
     """HTTP-клиент над приложением. read_conn/tx подменены на общее тест-соединение;
     tx-override дополнительно ставит app.user и оборачивает вызов в SAVEPOINT, чтобы
     пойманная роутером ошибка (409/404) откатывала только сбойную операцию, а не всю
@@ -570,21 +572,21 @@ def _user_override(role: str, username: str):
 
 
 @pytest.fixture
-def as_admin() -> CurrentUser:
+def as_admin() -> Iterator[CurrentUser]:
     app.dependency_overrides[require_user] = _user_override("admin", "admin@test")
     yield CurrentUser(username="admin@test", role="admin")
     app.dependency_overrides.pop(require_user, None)
 
 
 @pytest.fixture
-def as_viewer() -> CurrentUser:
+def as_viewer() -> Iterator[CurrentUser]:
     app.dependency_overrides[require_user] = _user_override("viewer", "viewer@test")
     yield CurrentUser(username="viewer@test", role="viewer")
     app.dependency_overrides.pop(require_user, None)
 
 
 @pytest.fixture
-def no_auth_bypass() -> None:
+def no_auth_bypass() -> Iterator[None]:
     """Выключить dev-bypass, чтобы require_user ушёл в реальную проверку токена
     (для теста 401). НЕ app_env='prod' — иначе lifespan кинет RuntimeError."""
 
@@ -921,12 +923,42 @@ async def test_compliance_pct_50(db_conn) -> None:
         )
     ).scalar_one()
     assert float(pct) == 50.0
+
+
+async def test_compliant_via_brand_key(db_conn) -> None:
+    """Вендор-представитель разрешённого бренда = compliant, НЕ deviation.
+    Вьюха судит по brand_key = coalesce(represents_id, id): выбор ИСТРАТЕХ
+    (represents -> Grundfos) при стандарте Grundfos засчитывается. Самое
+    неочевидное правило слоя — «упрощение» brand_key прошло бы мимо остальных
+    тестов зелёным."""
+    seg = await f.get_segment_id(db_conn, name="Бизнес")
+    cat = await f.make_category(db_conn, name="Оборудование")
+    pos = await f.make_position(db_conn, category_id=cat, name="Насосы")
+    owner = await f.make_vendor(db_conn, name="Grundfos")  # бренд-владелец в стандарте
+    rep = await f.make_vendor(db_conn, name="ИСТРАТЕХ", represents_id=owner)  # представитель
+    await f.make_listing(
+        db_conn, position_id=pos, segment_id=seg, vendor_id=owner, status="allowed"
+    )
+    proj = await f.make_project(db_conn, code="C-6", name="Проект", segment_id=seg)
+    await f.make_selection(db_conn, project_id=proj, position_id=pos, vendor_id=rep)
+
+    off = (
+        await db_conn.execute(
+            text(
+                "SELECT off_standard_count FROM compliance.project_position_status "
+                "WHERE project_id = :p AND position_id = :pos"
+            ),
+            {"p": proj, "pos": pos},
+        )
+    ).scalar_one()
+    assert off == 0
+    assert await _state(db_conn, proj, pos) == "compliant"
 ```
 
-- [ ] **Step 2: Прогнать — 5 PASS**
+- [ ] **Step 2: Прогнать — 6 PASS**
 
 Run: `cd backend; uv run pytest tests/db/test_compliance.py -v`
-Expected: 5 PASS. Если светофор разошёлся с ожиданием — перечитать вьюху `project_position_status` в `0002`, поправить тест (не БД).
+Expected: 6 PASS (включая `test_compliant_via_brand_key`). Если светофор разошёлся с ожиданием — перечитать вьюху `project_position_status` в `0002`, поправить тест (не БД).
 
 - [ ] **Step 3: Commit**
 
@@ -981,9 +1013,12 @@ async def test_freeze_copies_and_publishes(db_conn) -> None:
             text("SELECT * FROM release_listing WHERE release_id = :r"), {"r": rel}
         )
     ).mappings().all()
-    assert len(snap) == 1
-    assert snap[0]["vendor_name"] == "Freeze-V"
-    assert snap[0]["vendor_starred"] is True
+    # Проверяем НАЛИЧИЕ созданной строки, а не общий счётчик: когда появятся
+    # боевые листинги (импорт — этап 5), data+schema-ветка их унаследует и
+    # residential-снимок может стать больше единицы.
+    by_vendor = {r["vendor_name"]: r for r in snap}
+    assert "Freeze-V" in by_vendor
+    assert by_vendor["Freeze-V"]["vendor_starred"] is True
 
 
 async def test_freeze_twice_raises(db_conn) -> None:
@@ -1161,7 +1196,8 @@ async def test_freeze_via_api(client, as_admin, db_conn) -> None:
 
     snap = await client.get(f"/releases/{rel}/listing")
     assert snap.status_code == 200
-    assert len(snap.json()) == 1
+    # Наличие созданной строки, не общий счётчик (см. пояснение в db-тесте freeze).
+    assert any(r["vendor_name"] == "RelAPI-V" for r in snap.json())
 
 
 async def test_freeze_unknown_release_409(client, as_admin) -> None:
