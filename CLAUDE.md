@@ -33,7 +33,8 @@
 ## Стек
 
 - **БД:** PostgreSQL 18 (Neon; схема совместима с 16+, спроектирована на 16).
-  Подключение — единственный `DATABASE_URL` в `backend/.env`.
+  Подключение приложения — `DATABASE_URL` в `backend/.env`; для db-тестов —
+  отдельный `DATABASE_URL_TEST` (ветка Neon, data+schema).
 - **Бэкенд:** Python 3.12+, FastAPI, Pydantic v2, SQLAlchemy Core (async, asyncpg),
   Alembic (чистый SQL), authlib/pyjwt для OIDC. Менеджер — `uv`.
 - **Фронтенд:** Vite + React + TS, shadcn/ui (preset b0, radix) + Tailwind,
@@ -46,9 +47,11 @@
 ```
 just install       # установить зависимости бэка и фронта
 just migrate       # накатить миграции (ядро + модуль соответствия)
+just migrate-test  # миграции на тест-ветку Neon (DATABASE_URL_TEST); на data+schema — no-op
 just dev-back      # FastAPI на :8000 (/docs)
 just dev-front     # Vite на :5173 (проксирует /api -> :8000)
 just types         # перегенерировать TS-типы из OpenAPI
+just test          # тесты: backend pytest (+ db-тесты) + фронт vitest
 just ci            # все проверки: types, lint, typecheck, test
 ```
 
@@ -60,14 +63,30 @@ just ci            # все проверки: types, lint, typecheck, test
 - `backend/app/` — приложение: `main.py`, `config.py`, `db.py` (движок + tx),
   `auth.py` (OIDC/RBAC), `routers/` (поверх вьюх), `schemas/` (Pydantic).
 - `backend/migrations/` — Alembic; `sql/` — два канонических SQL-файла.
-- `frontend/src/api/` — типизированный клиент (`client.ts`) и хуки Query (`queries.ts`).
+- `backend/tests/` — pytest: `conftest.py` (фикстуры: откат-изоляция, ASGI-`client`,
+  RBAC-подмена), `factories.py` (SQL-фабрики), `db/` (интеграционные) + `api/` (роутеры).
+- `frontend/src/api/` — типизированный клиент (`client.ts`) и хуки Query (`queries.ts`);
+  тесты — `*.test.ts(x)` рядом с кодом (vitest).
 - `docs/` — [ARCHITECTURE.md](docs/ARCHITECTURE.md), [DEVELOPMENT.md](docs/DEVELOPMENT.md),
   [devlog/](docs/devlog/) (хронология работ, файл на задачу — читать при возврате к проекту).
 - `temp/` — исходные Excel (3 перечня) и дизайн-хендофф (не трогать без нужды).
 
+## Тесты
+
+- **Backend:** pytest + pytest-asyncio. Маркер `db` = интеграционный тест против
+  тест-ветки Neon; без `DATABASE_URL_TEST` такие тесты скипаются (локальный
+  `just ci` без тест-базы остаётся зелёным). Изоляция — откат транзакции на тест.
+- **Инвертированный TDD для db-тестов:** логика (вьюхи/функции/триггеры) уже в БД —
+  ждём PASS с первого прогона; FAIL = ошибка в тесте/понимании схемы, БД НЕ правим.
+- **Фабрики** ([backend/tests/factories.py](backend/tests/factories.py)) — сырой SQL
+  (без ORM), два яруса: lookup засеянных справочников vs вставка незасеянного.
+- **CI:** db-тесты идут на эфемерной ветке Neon (репо-секреты `NEON_API_KEY`/
+  `NEON_PROJECT_ID`; без них — скип). Детали —
+  [docs/devlog/2026-07-08-test-system.md](docs/devlog/2026-07-08-test-system.md).
+
 ## Порядок работ (из ТЗ §5) — где мы
 
-1. ✅ Каркас (репо, CI, миграции, генерация TS-типов).
+1. ✅ Каркас (репо, CI, миграции, TS-типы, **система тестов**: db/api-тесты, vitest, CI на ветке Neon).
 2. ⬜ Транзакционная обёртка есть; SSO/RBAC — каркас есть, нужна боевая интеграция.
 3. ⬜ Read-only API есть (listings/releases/compliance); матрица на фронте — TODO.
 4. ⬜ Проекты: занесение выбора (API есть), светофор на фронте — TODO.
