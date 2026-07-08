@@ -3,7 +3,9 @@ import { Button } from "@/components/ui/button"
 function Swatch({ label, className }: { label: string; className: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <div className={`h-12 w-full rounded-md border border-border ${className}`} />
+      <div
+        className={`h-12 w-full rounded-md border border-border ${className}`}
+      />
       <span className="text-caption text-muted-foreground">{label}</span>
     </div>
   )
@@ -21,7 +23,9 @@ export function App() {
         </header>
 
         <section className="flex flex-col gap-3">
-          <h2 className="text-caption text-muted-foreground uppercase">Buttons</h2>
+          <h2 className="text-caption text-muted-foreground uppercase">
+            Buttons
+          </h2>
           <div className="flex flex-wrap gap-3">
             <Button>Primary</Button>
             <Button variant="outline">Outline</Button>
@@ -35,10 +39,15 @@ export function App() {
         </section>
 
         <section className="flex flex-col gap-3">
-          <h2 className="text-caption text-muted-foreground uppercase">Surfaces & brand</h2>
+          <h2 className="text-caption text-muted-foreground uppercase">
+            Surfaces & brand
+          </h2>
           <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
             <Swatch label="background" className="bg-background" />
-            <Swatch label="card + shadow" className="bg-card shadow-elevation-2" />
+            <Swatch
+              label="card + shadow"
+              className="bg-card shadow-elevation-2"
+            />
             <Swatch label="primary" className="bg-primary" />
             <Swatch label="violet-bright" className="bg-violet-bright" />
             <Swatch label="mint" className="bg-mint" />
