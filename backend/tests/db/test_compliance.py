@@ -74,13 +74,17 @@ async def test_compliance_pct_50(db_conn) -> None:
 
     pos_ok = await f.make_position(db_conn, category_id=cat, name="Насосы")
     a1 = await f.make_vendor(db_conn, name="Pct-Allowed-1")
-    await f.make_listing(db_conn, position_id=pos_ok, segment_id=seg, vendor_id=a1, status="allowed")
+    await f.make_listing(
+        db_conn, position_id=pos_ok, segment_id=seg, vendor_id=a1, status="allowed",
+    )
     await f.make_selection(db_conn, project_id=proj, position_id=pos_ok, vendor_id=a1)
 
     pos_dev = await f.make_position(db_conn, category_id=cat, name="Клапаны")
     a2 = await f.make_vendor(db_conn, name="Pct-Allowed-2")
     off = await f.make_vendor(db_conn, name="Pct-Off")
-    await f.make_listing(db_conn, position_id=pos_dev, segment_id=seg, vendor_id=a2, status="allowed")
+    await f.make_listing(
+        db_conn, position_id=pos_dev, segment_id=seg, vendor_id=a2, status="allowed",
+    )
     await f.make_selection(db_conn, project_id=proj, position_id=pos_dev, vendor_id=off)
 
     pct = (
