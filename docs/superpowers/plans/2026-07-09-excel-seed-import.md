@@ -1188,16 +1188,117 @@ git commit -m "feat(seed): сборка плана загрузки build_load (
 
 **Files:**
 - Modify: `backend/app/seed/loader.py` (дописать)
+- Test: `backend/tests/db/test_seed_loader.py` (маркер `db`; скип без `DATABASE_URL_TEST`)
 
 **Interfaces:**
 - Consumes: `LoadPlan` (Task 7); `app.db.get_engine` (существует, [backend/app/db.py:30](../../../backend/app/db.py)); `app.seed.parse.SeedError`.
 - Produces: `async def execute(conn: AsyncConnection, plan: LoadPlan, *, author: str, freeze: bool, force: bool) -> None`; `async def run(paths: list[str], *, dry_run: bool, author: str, freeze: bool, force: bool, verify: bool) -> int` (возвращает exit-code: 0 ок, 1 калибровка/ошибка).
 
-> **Тест:** автоматического теста на запись НЕТ (фикстуры БД в репо нет — §18 слой 3, желательное). Код проверяется вручную (Task 10, `just seed-verify` — DB-free dry-run; при желании — реальный прогон на тест-ветку Neon). Логику записи держим прямолинейной.
+> **Тест:** db-интеграционный (маркер `db`) через фикстуру `db_conn` (откат-изоляция на тест-ветке Neon; скип без `DATABASE_URL_TEST`, поэтому `just ci` локально зелёный, а в CI гоняется на эфемерной ветке). Это обычный TDD: `execute` — новый код; логика БД (триггеры, `uq_listing_cell_vendor`, `freeze_release`) уже есть — тест проверяет их связку с нашим кодом. Покрывает: загрузку+автора, звезду, guard, `--force`-без-каскада-в-compliance, идемпотентность, freeze. Локально без тест-БД тест скипается — тогда его гоняет CI.
 >
-> **Осознанный долг (замечание ревью №4):** ветка `freeze` по умолчанию выключена (`--freeze` off, §13), поэтому её НЕ покрывают ни автотест, ни `seed-verify` (это dry-run). Значит код `freeze_release`-пути въезжает в `main` **непроверенным**. Не считать его готовым, пока кто-то не прогонит `--freeze` на тест-Neon (Task 10, шаг 5). В девлоге зафиксировать явно: «freeze-путь не верифицирован».
+> **Свойство безопасности `--force` (важно):** сброс через `DELETE` (не `TRUNCATE CASCADE`) означает, что FK `RESTRICT` из `compliance.project.release_id` / `project_selection.(vendor_id|position_id)` **физически не даст** удалить строки ядра, на которые ссылаются проекты: `DELETE` упадёт, транзакция откатится, проекты целы. Т.е. `--force` снимает guard, но снести стандарты «из-под» активных проектов всё равно нельзя — это желаемое поведение (§14), и тест `test_force_does_not_touch_projects` его фиксирует.
 
-- [ ] **Step 1: Implement execute + run** — дописать в `backend/app/seed/loader.py`:
+- [ ] **Step 1: Write the failing db-test** — `backend/tests/db/test_seed_loader.py`:
+
+```python
+"""Интеграция loader.execute против реальной схемы (триггеры/uq-индексы/freeze).
+db-тест: гоняется на тест-ветке Neon, скипается без DATABASE_URL_TEST."""
+
+from __future__ import annotations
+
+import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
+
+from app.seed.loader import ListingRow, LoadPlan, PositionRow, execute
+from app.seed.parse import CategoryNode, SeedError
+from app.seed.report import RunReport
+from tests import factories as f
+
+pytestmark = pytest.mark.db
+
+
+def _mini_plan() -> LoadPlan:
+    cats = [CategoryNode((1,), "Оборудование", None, 1)]
+    positions = [PositionRow(1, (1,), "Насос", "1", 0)]
+    listings = [
+        ListingRow(1, "residential", "Бизнес", "allowed", "Ридан", False, None, None, 0),
+        ListingRow(1, "residential", "Бизнес", "allowed", "ТеплоСила", False, None, None, 1),
+    ]
+    vendors = {"Ридан": False, "ТеплоСила": True}
+    report = RunReport(files=[], vendors_unique=2, agreements=1,
+                       star_occurrences=1, categories=1, category_warnings=[])
+    return LoadPlan(cats, positions, listings, vendors, {"residential": "2026-03-25"}, report)
+
+
+async def test_execute_loads_and_attributes_author(db_conn) -> None:
+    await execute(db_conn, _mini_plan(), author="seed@test", freeze=False, force=False)
+    rows = (await db_conn.execute(
+        text("SELECT created_by FROM listing WHERE status = 'allowed'"))).scalars().all()
+    assert len(rows) == 2 and set(rows) == {"seed@test"}  # автор через триггер
+    starred = (await db_conn.execute(
+        text("SELECT vendor_starred(id) FROM vendor WHERE name = 'ТеплоСила'"))).scalar_one()
+    assert starred is True  # звезда → agreement.active → vendor_starred
+
+
+async def test_execute_guard_blocks_when_projects_exist(db_conn) -> None:
+    seg = await f.get_segment_id(db_conn, name="Бизнес")
+    await f.make_project(db_conn, code="P-guard", name="Проект", segment_id=seg)
+    with pytest.raises(SeedError, match="проектами"):
+        await execute(db_conn, _mini_plan(), author="seed@test", freeze=False, force=False)
+
+
+async def test_force_does_not_touch_projects(db_conn) -> None:
+    # §14: --force снимает guard, но проект (без ссылок на удаляемые строки) выживает
+    seg = await f.get_segment_id(db_conn, name="Бизнес")
+    proj = await f.make_project(db_conn, code="P-force", name="Проект", segment_id=seg)
+    await execute(db_conn, _mini_plan(), author="seed@test", freeze=False, force=True)
+    survived = (await db_conn.execute(
+        text("SELECT count(*) FROM compliance.project WHERE id = :p"), {"p": proj})).scalar_one()
+    assert survived == 1
+
+
+async def test_force_cannot_delete_standards_referenced_by_selection(db_conn) -> None:
+    # Если выбор проекта ссылается на вендора/позицию — DELETE ядра падает на FK,
+    # транзакция откатывается: снести стандарты «из-под» проекта нельзя даже с --force.
+    seg = await f.get_segment_id(db_conn, name="Бизнес")
+    cat = await f.make_category(db_conn, name="X")
+    pos = await f.make_position(db_conn, category_id=cat, name="Поз")
+    v = await f.make_vendor(db_conn, name="V-keep")
+    proj = await f.make_project(db_conn, code="P-ref", name="Проект", segment_id=seg)
+    await f.make_selection(db_conn, project_id=proj, position_id=pos, vendor_id=v)
+    with pytest.raises(DBAPIError):  # FK RESTRICT на vendor/position
+        await execute(db_conn, _mini_plan(), author="seed@test", freeze=False, force=True)
+
+
+async def test_execute_is_idempotent(db_conn) -> None:
+    await execute(db_conn, _mini_plan(), author="seed@test", freeze=False, force=False)
+    n1 = (await db_conn.execute(text("SELECT count(*) FROM listing"))).scalar_one()
+    await execute(db_conn, _mini_plan(), author="seed@test", freeze=False, force=False)
+    n2 = (await db_conn.execute(text("SELECT count(*) FROM listing"))).scalar_one()
+    assert n1 == n2  # reset+reload — повтор не плодит строки
+
+
+async def test_execute_freeze_publishes_snapshot(db_conn) -> None:
+    # закрывает замечание №4: freeze-путь под автотестом
+    await execute(db_conn, _mini_plan(), author="seed@test", freeze=True, force=False)
+    rel = (await db_conn.execute(text(
+        "SELECT id, status FROM release WHERE building_type_id = "
+        "(SELECT id FROM building_type WHERE code = 'residential') "
+        "ORDER BY id DESC LIMIT 1"))).mappings().one()
+    assert rel["status"] == "published"
+    snap = (await db_conn.execute(
+        text("SELECT vendor_name FROM release_listing WHERE release_id = :r"),
+        {"r": rel["id"]})).scalars().all()
+    assert "Ридан" in snap
+```
+
+- [ ] **Step 2: Run test to verify it fails (or skips locally)**
+
+Run: `cd backend; uv run pytest tests/db/test_seed_loader.py -q`
+Expected: если `DATABASE_URL_TEST` задан — FAIL (`ImportError: cannot import name 'execute'`); если не задан — SKIP. При SKIP локально драйвером выступает CI/Neon; всё равно писать тест первым.
+
+- [ ] **Step 3: Implement execute + run** — дописать в `backend/app/seed/loader.py`:
 
 ```python
 from sqlalchemy import text
@@ -1349,16 +1450,21 @@ async def run(
     return 0
 ```
 
-- [ ] **Step 2: Typecheck the module**
+- [ ] **Step 4: Typecheck the module**
 
 Run: `cd backend; uv run mypy app/seed`
 Expected: `Success: no issues found`. (Если mypy ругается на `r.code`/`r.id` из Result — добавить локальный `# type: ignore[attr-defined]` на строках маппинга seg_id/bt_id или обращаться по индексу `r[0]/r[1]`.)
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 5: Run the db-test (passes on Neon; skips locally without test DB)**
+
+Run: `cd backend; uv run pytest tests/db/test_seed_loader.py -q`
+Expected: с `DATABASE_URL_TEST` — все PASS; без него — SKIP (тогда зелёный прогон обеспечит CI на эфемерной ветке Neon). Инвертированный TDD: логика БД уже есть — ждём PASS с первого прогона; FAIL = ошибка в нашем `execute`/понимании схемы, БД НЕ правим.
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add backend/app/seed/loader.py
-git commit -m "feat(seed): запись в БД (app.user, guard+DELETE-reset, listing, freeze)"
+git add backend/app/seed/loader.py backend/tests/db/test_seed_loader.py
+git commit -m "feat(seed): запись в БД (app.user, guard+DELETE-reset, listing, freeze) + db-тесты"
 ```
 
 ---
@@ -1458,10 +1564,10 @@ git commit -m "feat(seed): CLI-шим scripts.seed_vendors + just seed/seed-veri
 - Modify: `CLAUDE.md` (§5 порядок работ — отметить импорт), при необходимости
 - Create: `docs/devlog/2026-07-09-excel-seed-import.md`
 
-- [ ] **Step 1: Run full parse/reader/loader test suite**
+- [ ] **Step 1: Run full seed test suite**
 
-Run: `cd backend; uv run pytest tests/test_seed_parse.py tests/test_seed_reader.py tests/test_seed_loader.py -q`
-Expected: все PASS.
+Run: `cd backend; uv run pytest tests/test_seed_parse.py tests/test_seed_reader.py tests/test_seed_loader.py tests/db/test_seed_loader.py -q`
+Expected: юниты (parse/reader/loader) — PASS; db-тест — PASS с `DATABASE_URL_TEST`, иначе SKIP (гоняется в CI на Neon).
 
 - [ ] **Step 2: Lint + typecheck clean**
 
@@ -1485,14 +1591,12 @@ Expected: `OK: все проверки прошли` (types, lint, typecheck, te
 Команда (пример, из backend): установить окружение на тест-URL и `uv run python -m
 scripts.seed_vendors` без `--dry-run`. Зафиксировать наблюдение в девлоге.
 
-Дополнительно — **проверить freeze-путь** (иначе он въедет в main непроверенным,
-замечание №4): один прогон с `--freeze`, затем убедиться, что на каждый тип
-объекта создан `release` со `status='published'` и заполнен `release_listing`
-(`SELECT status, count(*) FROM release r JOIN release_listing rl ON rl.release_id=r.id
-GROUP BY 1`). Если DATABASE_URL_TEST не задан — оставить freeze помеченным как
-неверифицированный в девлоге.
+Freeze-путь уже под автотестом (`tests/db/test_seed_loader.py::test_execute_freeze_publishes_snapshot`);
+здесь — сквозное подтверждение на реальных 3 файлах: один прогон с `--freeze`, затем
+`SELECT status, count(*) FROM release r JOIN release_listing rl ON rl.release_id=r.id
+GROUP BY 1` (ожидаем `published` на каждый тип объекта, снимок непустой).
 
-- [ ] **Step 6: Write devlog** — `docs/devlog/2026-07-09-excel-seed-import.md`: что сделано, находки скана (маркеры Россия/По согласованию, merge C89:H93, одиночный Ujin), решения ревью (no-freeze, требование-в-note, --force), находки 2-го ревью (дедуп вендора в ячейке против `uq_listing_cell_vendor`; **freeze-путь не верифицирован, если не прогнан на тест-Neon**), калибровка. По образцу соседних файлов в `docs/devlog/`.
+- [ ] **Step 6: Write devlog** — `docs/devlog/2026-07-09-excel-seed-import.md`: что сделано, находки скана (маркеры Россия/По согласованию, merge C89:H93, одиночный Ujin), решения ревью (no-freeze, требование-в-note, --force), находки 2-го ревью (дедуп вендора в ячейке против `uq_listing_cell_vendor`), db-тесты Task 8 через `db_conn`/factories + свойство FK-RESTRICT (`--force` не сносит стандарты «из-под» проектов), калибровка. По образцу соседних файлов в `docs/devlog/`.
 
 - [ ] **Step 7: Commit + push + PR**
 
@@ -1523,10 +1627,10 @@ git push -u origin feat/excel-seed-import
 - §15 app.user через set_config bind → Task 8. ✔
 - §16 dry-run (DB-free) + отчёт + предупреждения → Tasks 6–8. ✔
 - §17 CLI/just → Task 9. ✔
-- §18 тесты (слой1 юнит, слой2 синтетический xlsx, слой3 опционально) → Tasks 1–7 (слой1/2), Task 8/10 (слой3 вручную). ✔
+- §18 тесты (слой1 юнит, слой2 синтетический xlsx, слой3 db-интеграция) → Tasks 1–7 (слой1/2), Task 8 (слой3: `tests/db/test_seed_loader.py` через `db_conn`/factories, гоняется в CI на Neon). ✔
 - §19 калибровка/verify → Task 6 + Task 10 smoke. ✔
 
-**Placeholder scan:** нет TBD/«handle edge cases»/«similar to Task N» — каждый шаг с полным кодом и командой. Task 8 без авто-теста — явно обосновано (нет фикстуры БД, §18), код полный, ручная проверка в Task 10. ✔
+**Placeholder scan:** нет TBD/«handle edge cases»/«similar to Task N» — каждый шаг с полным кодом и командой. Task 8 имеет db-интеграционный тест (`db_conn`/factories, маркер `db`), скипается локально без `DATABASE_URL_TEST`, гоняется в CI на Neon. ✔
 
 **Type consistency:** `CellListing`(Task 3) поля совпадают с использованием в build_load (Task 7). `ParsedVendor`(Task 2) ← `classify_cell`. `CategoryNode.number/parent/sort_order`(Task 4) ← `ordered()` ← execute cat_id (Task 8). `LoadPlan`/`PositionRow`/`ListingRow`(Task 7) ← execute (Task 8) поля совпадают (`pos_key`, `category_number`, `building_type`, `segment_name`, `vendor_name`, `spec_text`, `ujin`, `note`, `sort_order`). `run(...)` сигнатура (Task 8) ← CLI (Task 9) аргументы совпадают. ✔
 ```
