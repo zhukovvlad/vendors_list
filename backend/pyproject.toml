@@ -53,3 +53,6 @@ plugins = ["pydantic.mypy"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "db: интеграционный тест, требует тестовую БД (DATABASE_URL_TEST); пропускается, если URL не задан",
+]
