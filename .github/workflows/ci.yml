@@ -34,15 +34,26 @@ jobs:
           parent_branch: production
           branch_name: ci-${{ github.run_id }}-${{ github.run_attempt }}
           api_key: ${{ env.NEON_API_KEY }}
+      # Neon отдаёт «сырой» libpq-URI (db_url_pooled): без тега +asyncpg и с
+      # libpq-параметрами ssl (sslmode=..., channel_binding=...). Раньше здесь
+      # вручную приклеивали "?ssl=require" — но у db_url_pooled уже есть своя
+      # query-строка, и суффикс давал битый двойной "?...&...?ssl=require".
+      # Теперь передаём значение как есть: app.config нормализует ЛЮБОЙ
+      # Postgres URL (raw libpq или уже +asyncpg) к каноничному
+      # postgresql+asyncpg://...?ssl=require. Migrate-шаг гейтится через `if:`
+      # на успех создания Neon-ветки, поэтому тут просто plain-значение;
+      # Tests-шаг такого `if:` не имеет (должен выполняться и на форках без
+      # секретов), поэтому там условное выражение, отдающее '' при пустом
+      # db_url_pooled — это сохраняет форк-safety (db-tests скипаются).
       - name: Migrate test branch
         if: ${{ steps.neon.outcome == 'success' }}
         env:
           MIGRATE_TARGET: test
-          DATABASE_URL_TEST: ${{ steps.neon.outputs.db_url_pooled }}?ssl=require
+          DATABASE_URL_TEST: ${{ steps.neon.outputs.db_url_pooled }}
         run: uv run alembic upgrade head
       - name: Tests (pytest)
         env:
-          DATABASE_URL_TEST: ${{ steps.neon.outputs.db_url_pooled != '' && format('{0}?ssl=require', steps.neon.outputs.db_url_pooled) || '' }}
+          DATABASE_URL_TEST: ${{ steps.neon.outputs.db_url_pooled != '' && steps.neon.outputs.db_url_pooled || '' }}
         run: uv run pytest -q
       - name: Delete Neon test branch
         if: ${{ always() && steps.neon.outcome == 'success' }}
