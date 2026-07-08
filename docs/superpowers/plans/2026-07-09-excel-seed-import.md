@@ -1196,6 +1196,14 @@ git commit -m "feat(seed): сборка плана загрузки build_load (
 
 > **Тест:** db-интеграционный (маркер `db`) через фикстуру `db_conn` (откат-изоляция на тест-ветке Neon; скип без `DATABASE_URL_TEST`, поэтому `just ci` локально зелёный, а в CI гоняется на эфемерной ветке). Это обычный TDD: `execute` — новый код; логика БД (триггеры, `uq_listing_cell_vendor`, `freeze_release`) уже есть — тест проверяет их связку с нашим кодом. Покрывает: загрузку+автора, звезду, guard, `--force`-без-каскада-в-compliance, идемпотентность, freeze. Локально без тест-БД тест скипается — тогда его гоняет CI.
 >
+> **ВСЯ db-инфраструктура УЖЕ СУЩЕСТВУЕТ — НЕ создавать заново, только импортировать:**
+> - фикстура `db_conn` (external transaction + rollback) и скип-логика без `DATABASE_URL_TEST` — [backend/tests/conftest.py:56-64](../../../backend/tests/conftest.py) (+ `pytest_collection_modifyitems` :29-39);
+> - фабрики `get_segment_id` / `make_category` / `make_position` / `make_vendor` / `make_project` / `make_selection` — [backend/tests/factories.py](../../../backend/tests/factories.py) (все шесть уже определены);
+> - маркер `db` зарегистрирован — [backend/pyproject.toml:56-58](../../../backend/pyproject.toml) (`[tool.pytest.ini_options] markers`);
+> - CI-прогон db-тестов на эфемерной ветке Neon уже настроен (там уже живут `tests/db/test_audit.py`, `test_freeze_release.py` и др.); новый файл под `tests/db/` **не требует изменений в workflow** — подхватывается автоматически. Ветка Neon наследует schema+data, миграции накатывать не нужно.
+>
+> Единственный НОВЫЙ артефакт этого таска — файл `tests/db/test_seed_loader.py` (Step 1). `conftest.py`/`factories.py`/`pyproject.toml` **не трогаем**.
+>
 > **Свойство безопасности `--force` (важно):** сброс через `DELETE` (не `TRUNCATE CASCADE`) означает, что FK `RESTRICT` из `compliance.project.release_id` / `project_selection.(vendor_id|position_id)` **физически не даст** удалить строки ядра, на которые ссылаются проекты: `DELETE` упадёт, транзакция откатится, проекты целы. Т.е. `--force` снимает guard, но снести стандарты «из-под» активных проектов всё равно нельзя — это желаемое поведение (§14), и тест `test_force_does_not_touch_projects` его фиксирует.
 
 - [ ] **Step 1: Write the failing db-test** — `backend/tests/db/test_seed_loader.py`:
@@ -1293,10 +1301,10 @@ async def test_execute_freeze_publishes_snapshot(db_conn) -> None:
     assert "Ридан" in snap
 ```
 
-- [ ] **Step 2: Run test to verify it fails (or skips locally)**
+- [ ] **Step 2: Run test to verify it fails**
 
 Run: `cd backend; uv run pytest tests/db/test_seed_loader.py -q`
-Expected: если `DATABASE_URL_TEST` задан — FAIL (`ImportError: cannot import name 'execute'`); если не задан — SKIP. При SKIP локально драйвером выступает CI/Neon; всё равно писать тест первым.
+Expected: **collection error** `ImportError: cannot import name 'execute' from 'app.seed.loader'` — независимо от `DATABASE_URL_TEST` (импорт `execute` в шапке модуля падает на этапе сбора, до применения скип-маркера). `db_conn`/`factories` при этом резолвятся нормально (существуют). Скип-по-отсутствию-`DATABASE_URL_TEST` начнёт работать только после Step 3, когда `execute` появится.
 
 - [ ] **Step 3: Implement execute + run** — дописать в `backend/app/seed/loader.py`:
 
