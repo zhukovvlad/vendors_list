@@ -76,7 +76,7 @@ from app.seed.parse import (
         ("1.1. Инженерное оборудование", "", RowKind.HEADING, (1, 1), "Инженерное оборудование"),
         ("1.1.1. Отопление", None, RowKind.HEADING, (1, 1, 1), "Отопление"),
         (1, "Пластинчатый теплообменник", RowKind.POSITION, None, "Пластинчатый теплообменник"),
-        ("=A8+1", "Насос", RowKind.POSITION, None, "Насос"),
+        ("=A8+1", "Насос", RowKind.POSITION, None, "Насос"),  # контракт parse для формулы-строки; reader (data_only=True) её не отдаёт
         ("Примечание: Ujin — интеграция", None, RowKind.FOOTNOTE, None, None),
         (None, None, RowKind.BLANK, None, None),
         ("", "", RowKind.BLANK, None, None),
@@ -170,6 +170,11 @@ def _is_position_number(a_raw: object, a: str) -> bool:
         return True
     if isinstance(a_raw, float):
         return a_raw.is_integer()
+    # a.isdigit() — обычный номер позиции. a.startswith("=") — защитный контракт
+    # parse.py для формулы-строки: reader открывает файлы с data_only=True, где
+    # формулы уже вычислены в число, поэтому на боевых файлах эта ветка не
+    # срабатывает. Оставлена сознательно — parse.py не завязан на режим чтения
+    # (тест выше проверяет контракт напрямую). Это НЕ мёртвый код по недосмотру.
     return a.isdigit() or a.startswith("=")
 
 
@@ -356,6 +361,10 @@ def test_mixed_cell_requirement_into_note() -> None:
     assert [c.vendor_name for c in out] == ["Aquatherm green pipe sdr11", "sdr9(faser)"]
     assert all(c.note == "Требование: Россия" for c in out)
     assert out[0].starred is True
+    # инвариант ячейки: смешанная ячейка даёт ТОЛЬКО allowed-строки, без мета-строки
+    # (иначе триггер listing_cell_chk отверг бы вендоры + мета вместе)
+    assert all(c.status == "allowed" for c in out)
+    assert all(c.vendor_name is not None and c.spec_text is None for c in out)
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -971,6 +980,32 @@ def test_build_load_is_db_free(tmp_path: Path) -> None:
     _make(p, "соц", "Оборудование ")
     plan = build_load([str(p)])
     assert plan.report.files[0].building_type == "social"
+
+
+def _make_dup(path: Path) -> None:
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Производители"
+    ws["A5"] = "№"
+    ws["B5"] = "Наименование"
+    ws["C5"] = "Комфорт"
+    ws["A6"] = "1. Оборудование"
+    ws["A7"] = 1
+    ws["B7"] = "Насос"
+    ws["C7"] = "Ридан, Ридан"  # повтор бренда в одной ячейке
+    wb.save(path)
+
+
+def test_build_load_dedupes_repeated_vendor_in_cell(tmp_path: Path) -> None:
+    # uq_listing_cell_vendor: один vendor_id дважды в ячейке недопустим — дубль
+    # пропускается, остаётся один listing + предупреждение
+    p = tmp_path / "тест жилые.xlsx"
+    _make_dup(p)
+    plan = build_load([str(p)])
+    allowed = [ln for ln in plan.listings if ln.status == "allowed"]
+    assert len(allowed) == 1
+    assert plan.vendors == {"Ридан": False}
+    assert any("повтор вендора" in w for f in plan.report.files for w in f.warnings)
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1079,18 +1114,33 @@ def build_load(paths: list[str]) -> LoadPlan:
             fr.positions += 1
             for col, text in rr.cells.items():
                 seg = cols[col].segment_name
+                # Дедуп вендора В ПРЕДЕЛАХ ЯЧЕЙКИ: uq_listing_cell_vendor запрещает
+                # один vendor_id дважды в живой (position, segment). Два токена с
+                # одинаковым итоговым именем (напр. 'System Air*, System Air') иначе
+                # уронили бы реальный INSERT на уникальном индексе. Дубль пропускаем
+                # + предупреждение с локацией; звезду вендора при этом НЕ теряем
+                # (агрегируется в vendors до skip).
+                seen_vendors: set[str] = set()
                 for cl in classify_cell(text):
-                    fr.listings_by_status[cl.status] = fr.listings_by_status.get(cl.status, 0) + 1
-                    if cl.status == "not_applicable":
-                        fr.dash_cells += 1
-                    elif cl.status == "requirement":
-                        fr.requirement_cells += 1
-                    else:
-                        fr.vendor_tokens += 1
+                    if cl.status == "allowed":
                         assert cl.vendor_name is not None
                         vendors[cl.vendor_name] = vendors.get(cl.vendor_name, False) or cl.starred
+                        if cl.vendor_name in seen_vendors:
+                            fr.warnings.append(
+                                f"строка {rr.row_no}, класс {seg!r}: повтор вендора "
+                                f"{cl.vendor_name!r} в ячейке — дубль пропущен "
+                                f"(uq_listing_cell_vendor)"
+                            )
+                            continue
+                        seen_vendors.add(cl.vendor_name)
+                        fr.vendor_tokens += 1
                         if "Требование:" in (cl.note or ""):
                             fr.warnings.append(f"строка {rr.row_no}: смешанная ячейка → {cl.note}")
+                    elif cl.status == "not_applicable":
+                        fr.dash_cells += 1
+                    else:  # requirement
+                        fr.requirement_cells += 1
+                    fr.listings_by_status[cl.status] = fr.listings_by_status.get(cl.status, 0) + 1
                     listings.append(
                         ListingRow(
                             pos_key, data.building_type, seg, cl.status,
@@ -1144,6 +1194,8 @@ git commit -m "feat(seed): сборка плана загрузки build_load (
 - Produces: `async def execute(conn: AsyncConnection, plan: LoadPlan, *, author: str, freeze: bool, force: bool) -> None`; `async def run(paths: list[str], *, dry_run: bool, author: str, freeze: bool, force: bool, verify: bool) -> int` (возвращает exit-code: 0 ок, 1 калибровка/ошибка).
 
 > **Тест:** автоматического теста на запись НЕТ (фикстуры БД в репо нет — §18 слой 3, желательное). Код проверяется вручную (Task 10, `just seed-verify` — DB-free dry-run; при желании — реальный прогон на тест-ветку Neon). Логику записи держим прямолинейной.
+>
+> **Осознанный долг (замечание ревью №4):** ветка `freeze` по умолчанию выключена (`--freeze` off, §13), поэтому её НЕ покрывают ни автотест, ни `seed-verify` (это dry-run). Значит код `freeze_release`-пути въезжает в `main` **непроверенным**. Не считать его готовым, пока кто-то не прогонит `--freeze` на тест-Neon (Task 10, шаг 5). В девлоге зафиксировать явно: «freeze-путь не верифицирован».
 
 - [ ] **Step 1: Implement execute + run** — дописать в `backend/app/seed/loader.py`:
 
@@ -1433,7 +1485,14 @@ Expected: `OK: все проверки прошли` (types, lint, typecheck, te
 Команда (пример, из backend): установить окружение на тест-URL и `uv run python -m
 scripts.seed_vendors` без `--dry-run`. Зафиксировать наблюдение в девлоге.
 
-- [ ] **Step 6: Write devlog** — `docs/devlog/2026-07-09-excel-seed-import.md`: что сделано, находки скана (маркеры Россия/По согласованию, merge C89:H93, одиночный Ujin), решения ревью (no-freeze, требование-в-note, --force), калибровка. По образцу соседних файлов в `docs/devlog/`.
+Дополнительно — **проверить freeze-путь** (иначе он въедет в main непроверенным,
+замечание №4): один прогон с `--freeze`, затем убедиться, что на каждый тип
+объекта создан `release` со `status='published'` и заполнен `release_listing`
+(`SELECT status, count(*) FROM release r JOIN release_listing rl ON rl.release_id=r.id
+GROUP BY 1`). Если DATABASE_URL_TEST не задан — оставить freeze помеченным как
+неверифицированный в девлоге.
+
+- [ ] **Step 6: Write devlog** — `docs/devlog/2026-07-09-excel-seed-import.md`: что сделано, находки скана (маркеры Россия/По согласованию, merge C89:H93, одиночный Ujin), решения ревью (no-freeze, требование-в-note, --force), находки 2-го ревью (дедуп вендора в ячейке против `uq_listing_cell_vendor`; **freeze-путь не верифицирован, если не прогнан на тест-Neon**), калибровка. По образцу соседних файлов в `docs/devlog/`.
 
 - [ ] **Step 7: Commit + push + PR**
 
