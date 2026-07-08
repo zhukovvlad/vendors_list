@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -21,7 +22,17 @@ if config.config_file_name is not None:
 
 # Единственная строка подключения — DATABASE_URL (async); Settings читает
 # backend/.env, а для Alembic берём производный sync-URL (psycopg). База одна.
-config.set_main_option("sqlalchemy.url", get_settings().database_url_sync)
+# MIGRATE_TARGET=test переключает на тестовую ветку Neon (DATABASE_URL_TEST).
+_settings = get_settings()
+if os.getenv("MIGRATE_TARGET") == "test":
+    _url = _settings.database_url_test_sync
+    if not _url:
+        raise RuntimeError(
+            "MIGRATE_TARGET=test, но DATABASE_URL_TEST не задан (backend/.env или env CI)"
+        )
+else:
+    _url = _settings.database_url_sync
+config.set_main_option("sqlalchemy.url", _url)
 
 target_metadata = None  # schema-first: autogenerate отключён намеренно
 

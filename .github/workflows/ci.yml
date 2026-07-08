@@ -1,9 +1,20 @@
 name: CI
 
+# paths-ignore: не гоняем CI (в т.ч. эфемерную ветку Neon), когда изменения
+# затрагивают ТОЛЬКО документацию. Если в наборе изменений есть хоть один
+# не-док файл — CI запускается как обычно. Для pull_request фильтр смотрит на
+# СОВОКУПНЫЙ диф PR (base..head): чисто-доковый PR пропускается целиком;
+# смешанный (код+доки) PR прогоняется на каждый пуш, включая доковые коммиты.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
   pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
 
 jobs:
   backend:
@@ -11,6 +22,9 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
@@ -22,8 +36,47 @@ jobs:
         run: uv run ruff check .
       - name: Types (mypy)
         run: uv run mypy app
+      - name: Create Neon test branch
+        id: neon
+        if: ${{ env.NEON_API_KEY != '' }}
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ci-${{ github.run_id }}-${{ github.run_attempt }}
+          api_key: ${{ env.NEON_API_KEY }}
+      # Neon отдаёт «сырой» libpq-URI (db_url_pooled): без тега +asyncpg и с
+      # libpq-параметрами ssl (sslmode=..., channel_binding=...). Раньше здесь
+      # вручную приклеивали "?ssl=require" — но у db_url_pooled уже есть своя
+      # query-строка, и суффикс давал битый двойной "?...&...?ssl=require".
+      # Теперь передаём значение как есть: app.config нормализует ЛЮБОЙ
+      # Postgres URL (raw libpq или уже +asyncpg) к каноничному
+      # postgresql+asyncpg://...?ssl=require. Migrate-шаг гейтится через `if:`
+      # на успех создания Neon-ветки, поэтому тут просто plain-значение;
+      # Tests-шаг такого `if:` не имеет (должен выполняться и на форках без
+      # секретов), поэтому там условное выражение, отдающее '' при пустом
+      # db_url_pooled — это сохраняет форк-safety (db-tests скипаются).
+      - name: Migrate test branch
+        if: ${{ steps.neon.outcome == 'success' }}
+        env:
+          MIGRATE_TARGET: test
+          DATABASE_URL_TEST: ${{ steps.neon.outputs.db_url_pooled }}
+        run: uv run alembic upgrade head
       - name: Tests (pytest)
+        env:
+          DATABASE_URL_TEST: ${{ steps.neon.outputs.db_url_pooled != '' && steps.neon.outputs.db_url_pooled || '' }}
         run: uv run pytest -q
+      - name: Delete Neon test branch
+        # continue-on-error: сбой удаления (сетевой сбой/хиккап Neon API) не должен
+        # ронять уже зелёную джобу — тесты прошли. Осиротевшую ветку подберёт
+        # TTL/периодическая чистка. Имя ветки уникально (run_id-run_attempt).
+        if: ${{ always() && steps.neon.outcome == 'success' }}
+        continue-on-error: true
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ci-${{ github.run_id }}-${{ github.run_attempt }}
+          api_key: ${{ env.NEON_API_KEY }}
       - name: Export OpenAPI
         run: uv run python -m scripts.export_openapi
       - name: Upload OpenAPI schema
@@ -59,5 +112,7 @@ jobs:
         run: npm run format:check
       - name: Typecheck (tsc)
         run: npm run typecheck
+      - name: Tests (vitest)
+        run: npm run test
       - name: Build
         run: npm run build

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +17,30 @@ class Settings(BaseSettings):
     # Единственная строка подключения — async-URL приложения (asyncpg).
     # Sync-URL для Alembic выводится из неё (см. database_url_sync). База одна.
     database_url: str = "postgresql+asyncpg://vendors:vendors@localhost:5432/vendors"
+
+    # Тестовая ветка Neon (data+schema). Пусто в prod/обычном dev; задаётся
+    # в backend/.env локально и в env CI-джобы. Драйвер asyncpg → хвост ssl=require.
+    database_url_test: str = ""
+
+    @field_validator("database_url_test", mode="after")
+    @classmethod
+    def _normalize_test_url(cls, v: str) -> str:
+        """Нормализовать DATABASE_URL_TEST к каноничному async-виду.
+
+        В CI это значение приходит «сырым» из Neon (db_url_pooled) — libpq-URI
+        вида postgresql://user:pass@host/db?sslmode=require&channel_binding=require,
+        без тега драйвера +asyncpg и с libpq-параметрами ssl, которые asyncpg не
+        понимает. Локально в backend/.env значение уже в каноничной форме
+        (postgresql+asyncpg://...?ssl=require). Приводим оба случая к одному
+        виду: схема всегда postgresql+asyncpg, исходная query-строка отбрасывается
+        целиком и заменяется на ?ssl=require. Идемпотентно: повторное применение
+        к уже нормализованному URL не меняет его.
+        """
+        if not v:
+            return v
+        # всё после схемы, без query-строки
+        authority_path = v.split("://", 1)[-1].split("?", 1)[0]
+        return f"postgresql+asyncpg://{authority_path}?ssl=require"
 
     cors_origins: str = "http://localhost:5173"
 
@@ -40,6 +65,15 @@ class Settings(BaseSettings):
         psycopg. Хост/база/пользователь те же — БД одна.
         """
         url = self.database_url.replace("+asyncpg", "+psycopg")
+        return url.replace("ssl=require", "sslmode=require")
+
+    @property
+    def database_url_test_sync(self) -> str:
+        """Sync-URL (psycopg) для Alembic против тестовой ветки. Пусто, если
+        database_url_test не задан. Трансформация — как у database_url_sync."""
+        if not self.database_url_test:
+            return ""
+        url = self.database_url_test.replace("+asyncpg", "+psycopg")
         return url.replace("ssl=require", "sslmode=require")
 
     @property
