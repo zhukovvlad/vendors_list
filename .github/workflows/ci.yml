@@ -67,7 +67,11 @@ jobs:
           DATABASE_URL_TEST: ${{ steps.neon.outputs.db_url_pooled != '' && steps.neon.outputs.db_url_pooled || '' }}
         run: uv run pytest -q
       - name: Delete Neon test branch
+        # continue-on-error: сбой удаления (сетевой сбой/хиккап Neon API) не должен
+        # ронять уже зелёную джобу — тесты прошли. Осиротевшую ветку подберёт
+        # TTL/периодическая чистка. Имя ветки уникально (run_id-run_attempt).
         if: ${{ always() && steps.neon.outcome == 'success' }}
+        continue-on-error: true
         uses: neondatabase/delete-branch-action@v3
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}

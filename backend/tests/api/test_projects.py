@@ -27,7 +27,10 @@ async def test_create_project_forbidden_for_viewer(client, as_viewer, db_conn) -
 
 async def test_list_projects_returns_created(client, as_admin, db_conn) -> None:
     seg = await f.get_segment_id(db_conn, name="Бизнес")
-    await client.post("/projects", json={"code": "API-P3", "name": "N", "segment_id": seg})
+    created = await client.post(
+        "/projects", json={"code": "API-P3", "name": "N", "segment_id": seg}
+    )
+    assert created.status_code == 201
     resp = await client.get("/projects")
     assert resp.status_code == 200
     assert "API-P3" in [p["code"] for p in resp.json()]
@@ -40,7 +43,8 @@ async def test_summary_404_for_unknown_project(client, as_admin) -> None:
 
 async def test_duplicate_project_code_409(client, as_admin, db_conn) -> None:
     seg = await f.get_segment_id(db_conn, name="Бизнес")
-    await client.post("/projects", json={"code": "API-DUP", "name": "N", "segment_id": seg})
+    first = await client.post("/projects", json={"code": "API-DUP", "name": "N", "segment_id": seg})
+    assert first.status_code == 201
     resp = await client.post(
         "/projects", json={"code": "API-DUP", "name": "N2", "segment_id": seg}
     )

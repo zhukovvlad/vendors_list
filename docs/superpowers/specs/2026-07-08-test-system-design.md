@@ -169,8 +169,9 @@ segment_id, release_id) → project_selection (нужны position_id, vendor_id
   setupFiles: ["src/test/setup.ts"], globals: true }`. `setup.ts` подключает
   матчеры jest-dom.
 - Скрипты `package.json`: `"test": "vitest run"`, `"test:watch": "vitest"`.
-- Стартовые тесты (минимум): рендер `Button` + тест хука/клиента Query с
-  мок-fetch. Дальше растим вместе с экранами.
+- Стартовые тесты (минимум): рендер `Button` + smoke-проверка экспорта
+  настроенного клиента (`api.GET` — функция). Тест Query-хука с мок-fetch —
+  по мере роста экранов. Дальше растим вместе с ними.
 
 ### 4.6. justfile и CI
 
