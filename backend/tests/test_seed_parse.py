@@ -15,6 +15,7 @@ from app.seed.parse import (
     parse_vendor_token,
     split_vendor_tokens,
 )
+from app.seed.report import CALIBRATION, FileReport, RunReport
 
 
 @pytest.mark.parametrize(
@@ -146,3 +147,32 @@ def test_category_broken_tree_raises() -> None:
     t.add((2, 4), "Благоустройство", file_label="офис")  # нет родителя (2,)
     with pytest.raises(SeedError, match="2.4"):
         t.integrity_check()
+
+
+def test_report_render_and_verify() -> None:
+    fr = FileReport(building_type="residential", sheet_title="Производители",
+                    hidden_sheets=["Vendor list"])
+    fr.headings = 54
+    fr.positions = 266
+    fr.footnotes = 2
+    fr.blanks = 3
+    fr.dash_cells = 66
+    fr.requirement_cells = 18
+    fr.vendor_tokens = 1482
+    fr.listings_by_status = {"allowed": 1482, "not_applicable": 66, "requirement": 18}
+    rep = RunReport(files=[fr], vendors_unique=300, agreements=120,
+                    star_occurrences=582, categories=54, category_warnings=[])
+    text = rep.render()
+    assert "residential" in text and "266" in text
+    # калибровка residential сходится → нет расхождений
+    assert rep.verify() == []
+
+
+def test_report_verify_flags_mismatch() -> None:
+    fr = FileReport(building_type="residential", sheet_title="s", hidden_sheets=[])
+    fr.headings = 999  # неверно
+    fr.positions = CALIBRATION["residential"]["positions"]
+    fr.footnotes = 2
+    rep = RunReport(files=[fr], vendors_unique=0, agreements=0,
+                    star_occurrences=0, categories=0, category_warnings=[])
+    assert any("headings" in m for m in rep.verify())
