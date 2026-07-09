@@ -1,4 +1,5 @@
-"""GET /listings поверх listing_live: пагинация и фильтр по segment_id."""
+"""GET /listings поверх listing_live: пагинация и фильтры segment_id/position_id
+(проверка независима от заполнения БД — своя строка изолируется фильтром по позиции)."""
 
 import pytest
 
@@ -19,4 +20,11 @@ async def test_listings_page_and_filter(client, as_admin, db_conn) -> None:
     body = resp.json()
     assert body["total"] >= 1
     assert body["limit"] == 100 and body["offset"] == 0
-    assert any(r["vendor_name"] == "List-V" for r in body["items"])
+
+    # Свою строку ищем через фильтр по СВЕЖЕСОЗДАННОЙ позиции, а не среди первых
+    # 100 результатов сегмента: приложение штатно живёт с заполненной БД (сид
+    # стандартов — тысячи listing в сегменте), и на такой базе List-V ушёл бы за
+    # первую страницу. Фильтр по pos изолирует данные теста независимо от baseline.
+    own = await client.get("/listings", params={"segment_id": seg, "position_id": pos})
+    assert own.status_code == 200
+    assert any(r["vendor_name"] == "List-V" for r in own.json()["items"])
