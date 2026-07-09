@@ -75,3 +75,40 @@ def classify_row(col_a: object, col_b: object, *, row_no: int) -> RowClass:
     if _is_position_number(col_a, a):
         return RowClass(RowKind.POSITION, name=b, source_ref=a)
     raise SeedError(f"Строка {row_no}: не распознана: A={a!r} B={b!r}")
+
+
+@dataclass(frozen=True)
+class ParsedVendor:
+    name: str
+    starred: bool
+    ujin: bool
+    note: str | None
+
+
+_SCOPE_MARKERS = ("для ", "паркинг", "поквартирн", "тех. помещ")
+_UJIN = "Ujin"
+
+
+def _collapse_ws(s: str) -> str:
+    return re.sub(r"\s+", " ", s.replace("\n", " ")).strip()
+
+
+def parse_vendor_token(token: str) -> ParsedVendor:
+    raw = _collapse_ws(token)
+    starred = "*" in raw
+    name = raw.replace("*", "")
+    ujin = False
+    if _UJIN in name:
+        stripped = _collapse_ws(name.replace(_UJIN, ""))
+        if stripped:  # 'MasterScada ERMUjin' → флаг интеграции, имя = остаток
+            ujin = True
+            name = stripped
+        # else: токен целиком 'Ujin' → вендор 'Ujin', ujin остаётся False (§9.3)
+    note: str | None = None
+    m = re.search(r"\(([^)]*)\)", name)  # область применения: содержимое ПЕРВОЙ скобки
+    if m:
+        inner = m.group(1).strip()
+        if any(mk in inner.lower() for mk in _SCOPE_MARKERS):
+            note = inner
+            name = name[: m.start()].strip()
+    return ParsedVendor(name=_collapse_ws(name), starred=starred, ujin=ujin, note=note)

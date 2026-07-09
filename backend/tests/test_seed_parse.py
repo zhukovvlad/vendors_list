@@ -3,10 +3,12 @@ from __future__ import annotations
 import pytest
 
 from app.seed.parse import (
+    ParsedVendor,
     RowKind,
     SeedError,
     classify_row,
     parse_heading_number,
+    parse_vendor_token,
 )
 
 
@@ -47,3 +49,24 @@ def test_unrecognized_row_raises_with_location() -> None:
 def test_content_in_a_empty_b_not_heading_raises() -> None:
     with pytest.raises(SeedError):
         classify_row("Просто текст", None, row_no=5)
+
+
+@pytest.mark.parametrize(
+    ("token", "name", "starred", "ujin", "note"),
+    [
+        ("ИСТРАТЕХ* (Grundfos)", "ИСТРАТЕХ (Grundfos)", True, False, None),
+        ("Helmer (SystemAir*)", "Helmer (SystemAir)", True, False, None),
+        ("Midea (Bosch, Clivet)", "Midea (Bosch, Clivet)", False, False, None),
+        ("STRAZH (RUBEZH)*Ujin", "STRAZH (RUBEZH)", True, True, None),
+        ("MasterScada ERMUjin", "MasterScada ERM", False, True, None),
+        ("Ujin", "Ujin", False, False, None),  # одиночный Ujin → вендор, не флаг (§9.3)
+        ("АРКТИКА (для тех. помещений)", "АРКТИКА", False, False, "для тех. помещений"),
+        ("Арктика (паркинг)", "Арктика", False, False, "паркинг"),
+        ('"ЭМ-Кабель"*', '"ЭМ-Кабель"', True, False, None),  # кавычки не срезаем (§9.5)
+    ],
+)
+def test_parse_vendor_token(
+    token: str, name: str, starred: bool, ujin: bool, note: object
+) -> None:
+    pv = parse_vendor_token(token)
+    assert pv == ParsedVendor(name=name, starred=starred, ujin=ujin, note=note)
