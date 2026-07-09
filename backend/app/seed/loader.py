@@ -186,6 +186,19 @@ async def _guard_no_projects(conn: AsyncConnection, force: bool) -> None:
         )
 
 
+async def _apply_timeouts(conn: AsyncConnection) -> None:
+    # Операционная страховка сессии сида (SET LOCAL — живёт только в этой транзакции).
+    # ВНИМАНИЕ (инвариант): idle=15s безопасен ТОЛЬКО потому, что build_load
+    # (весь парсинг Excel) в run() исполняется ДО begin() — внутри транзакции
+    # клиентских пауз нет, лишь пайплайн вставок с мс-зазорами. Перенос парсинга
+    # внутрь транзакции сделает 15s миной. statement_timeout де-факто сторожит
+    # _reset (каскад DELETE) и freeze_release; для executemany в extended-протоколе
+    # таймер гасится завершением каждого Execute (запас огромен). Значения —
+    # литеральные константы (не пользовательский ввод), инъекции нет.
+    await conn.execute(text("SET LOCAL statement_timeout = '60s'"))
+    await conn.execute(text("SET LOCAL idle_in_transaction_session_timeout = '15s'"))
+
+
 async def _reset(conn: AsyncConnection) -> None:
     for tbl in _RESET_ORDER:
         await conn.execute(text(f"DELETE FROM public.{tbl}"))  # compliance НЕ трогаем
@@ -301,6 +314,7 @@ async def run(
         print("\n(dry-run: БД не изменялась)")
         return 0
     async with get_engine().begin() as conn:
+        await _apply_timeouts(conn)
         await execute(conn, plan, author=author, freeze=freeze, force=force)
     print("\n✅ Записано в БД.")
     return 0

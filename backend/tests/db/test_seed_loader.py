@@ -88,3 +88,18 @@ async def test_execute_freeze_publishes_snapshot(db_conn) -> None:
         text("SELECT vendor_name FROM release_listing WHERE release_id = :r"),
         {"r": rel["id"]})).scalars().all()
     assert "Ридан" in snap
+
+
+async def test_apply_timeouts_sets_session_guc(db_conn) -> None:
+    # Тестируем ПРИМЕНЕНИЕ настроек (не эффект — эффект без медленного оператора
+    # не воспроизвести). Ловит класс ошибок единиц измерения: SET ... = 60 это 60 мс.
+    from app.seed.loader import _apply_timeouts
+
+    await _apply_timeouts(db_conn)
+    st = (await db_conn.execute(text("SHOW statement_timeout"))).scalar_one()
+    idl = (await db_conn.execute(
+        text("SHOW idle_in_transaction_session_timeout"))).scalar_one()
+    # PG нормализует GUC-длительность к крупнейшей единице, делящей нацело:
+    # '60s' → '1min'; '15s' в минуты не делится → остаётся '15s'.
+    assert st == "1min"
+    assert idl == "15s"
