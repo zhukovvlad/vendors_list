@@ -56,6 +56,8 @@ just dev-front     # Vite на :5173 (проксирует /api -> :8000)
 just types         # перегенерировать TS-типы из OpenAPI
 just test          # тесты: backend pytest (+ db-тесты) + фронт vitest
 just ci            # все проверки: types, lint, typecheck, test
+just seed          # разовый сид 3 стартовых Excel (temp/) в живые таблицы; боевая запись ТОЛЬКО с --yes
+just seed-verify   # сухая калибровка парсера на 3 файлах (--dry-run --verify, без БД)
 ```
 
 Полный список: `just` (без аргументов). Словарь команд унифицирован с
@@ -64,10 +66,13 @@ just ci            # все проверки: types, lint, typecheck, test
 ## Карта репозитория
 
 - `backend/app/` — приложение: `main.py`, `config.py`, `db.py` (движок + tx),
-  `auth.py` (OIDC/RBAC), `routers/` (поверх вьюх), `schemas/` (Pydantic).
+  `auth.py` (OIDC/RBAC), `routers/` (поверх вьюх), `schemas/` (Pydantic),
+  `seed/` (разовый Excel-сид: `parse`/`reader`/`report`/`loader`, см. devlog 2026-07-09).
+- `backend/scripts/` — тонкие CLI-шимы: `seed_vendors.py` (сид), `export_openapi.py`.
 - `backend/migrations/` — Alembic; `sql/` — два канонических SQL-файла.
 - `backend/tests/` — pytest: `conftest.py` (фикстуры: откат-изоляция, ASGI-`client`,
-  RBAC-подмена), `factories.py` (SQL-фабрики), `db/` (интеграционные) + `api/` (роутеры).
+  RBAC-подмена), `factories.py` (SQL-фабрики), `db/` (интеграционные) + `api/` (роутеры);
+  сид-юниты `test_seed_{parse,reader,loader,cli}.py` + `db/test_seed_loader.py`.
 - `frontend/src/api/` — типизированный клиент (`client.ts`) и хуки Query (`queries.ts`);
   тесты — `*.test.ts(x)` рядом с кодом (vitest).
 - `docs/` — [ARCHITECTURE.md](docs/ARCHITECTURE.md), [DEVELOPMENT.md](docs/DEVELOPMENT.md),
@@ -110,3 +115,7 @@ just ci            # все проверки: types, lint, typecheck, test
 через `agreement`, в имя не тащить), `(Native)`, объединённые ячейки шапок,
 мусорные колонки (один лист сообщает 16384 колонки), лист с датой 2022.
 Маппинг вендоров подтверждает человек — не делать импорт полностью авто.
+
+> Разовый сид (`app/seed`) эти ловушки уже разбирает — детали и находки в
+> [devlog 2026-07-09](docs/devlog/2026-07-09-excel-seed-import.md). Раздел остаётся
+> актуальным для будущего интерактивного импорта §5 (staging → сверка → коммит).

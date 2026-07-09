@@ -37,8 +37,15 @@ Excel в живые таблицы ядра (`category`, `position`, `vendor`, `
   (константа `CALIBRATION`, метод `RunReport.verify()`).
 
 **CLI** ([scripts/seed_vendors.py](../../backend/scripts/seed_vendors.py)) — тонкий шим
-(argparse → `asyncio.run(loader.run(...))`); флаги `--dry-run`/`--author`/`--freeze`/`--force`/`--verify`.
+(argparse → `asyncio.run(loader.run(...))`); флаги `--dry-run`/`--author`/`--freeze`/`--force`/`--verify`/`--yes`.
 `just seed *args` (сид), `just seed-verify` (`--dry-run --verify`, ручная калибровка вне CI).
+
+**Страховка `--yes` (добавлена по итогам инцидента).** Bare `just seed` без флагов теперь
+**отказывает** (exit 2, к БД не подключается): боевая перезагрузка таблиц стандартов — только с
+явным `--yes`; `--dry-run`/`--verify` разрешены без него. Причина: случайный `just seed` сразу
+полез писать в основную Neon-БД; процесс замёрз в `idle in transaction` (QuickEdit-пауза
+PowerShell посреди построчной вставки), откатили через `pg_terminate_backend` — durable-данных не
+осталось, но guard закрывает сам класс ошибки.
 
 ## Находки разведочного скана (реализованы)
 
@@ -138,3 +145,9 @@ Excel в живые таблицы ядра (`category`, `position`, `vendor`, `
   (ТЗ §3.5); схема позволяет доработать без переимпорта.
 - Реальная запись на боевую БД и `--freeze` на 3 файлах — по решению админа из приложения
   после чистки данных (дефолт сида — только живое состояние).
+- **Декомпозиция записи (согласовано, ещё не сделано).** Сейчас `execute` льёт ~14k строк
+  построчными round-trip’ами до Neon в одной транзакции — минуты, и широкое окно для фризов.
+  План: (A) пакетные инсерты (`executemany`/multi-row VALUES; для listing `COPY`) ВНУТРИ той же
+  транзакции — минуты→секунды, атомарность §14 сохраняем; (B) `idle_in_transaction_session_timeout`
+  + `statement_timeout`, чтобы фриз/обрыв сам откатывался. Committed-batches и staging-swap
+  отклонены (последнее — будущая фича §5). Оформить отдельной веткой+спекой+PR.
