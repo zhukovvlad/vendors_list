@@ -75,7 +75,7 @@ class MatrixCell(BaseModel):
 class MatrixRow(BaseModel):
     position_id: int
     position_name: str
-    category_path: str | None
+    category_path: str               # НЕ | None: position.category_id NOT NULL (0001:80) ⇒ путь всегда есть
     cells: list[MatrixCell]          # только сегменты, где у позиции есть ряд; отсутствие ⇒ "—"
 
 class SegmentRef(BaseModel):
@@ -107,20 +107,35 @@ class Matrix(BaseModel):
 
 Все запросы — сырой SQL через SQLAlchemy Core (без ORM), только чтение.
 
-1. **Страница позиций** — различные позиции под фильтром, в **кураторском** порядке:
+1. **Страница позиций** — различные позиции под фильтром, в **кураторском** порядке.
+   Отбор `DISTINCT` — по **одной колонке** `position_id` (не по кортежу: иначе, если
+   `listing_live` начнёт менять состав, `DISTINCT` тихо размножит строки). Ключи
+   сортировки (`csp`, текстовый путь) считаются **один раз на различную категорию**
+   в CTE — рекурсивных вызовов O(различные категории), а не O(listing-ряды):
    ```sql
-   SELECT DISTINCT ll.position_id, pos.name AS position_name,
-                   ll.category_path,
-                   category_sort_path(pos.category_id) AS csp, pos.sort_order
-   FROM listing_live ll
-   JOIN position pos ON pos.id = ll.position_id
-   WHERE ll.segment_id IN (SELECT id FROM segment WHERE building_type_id = :bt)
-     [AND ll.segment_id = :seg]
-     [AND (ll.position_name ILIKE :q OR ll.vendor_name ILIKE :q OR ll.category_path ILIKE :q)]
-   ORDER BY csp, pos.sort_order, ll.position_id
+   WITH pos_page AS (
+       SELECT DISTINCT ll.position_id
+       FROM listing_live ll
+       WHERE ll.segment_id IN (SELECT id FROM segment WHERE building_type_id = :bt)
+         [AND ll.segment_id = :seg]
+         [AND (ll.position_name ILIKE :q OR ll.vendor_name ILIKE :q OR ll.category_path ILIKE :q)]
+   ),
+   cats AS (   -- функции-пути ОДИН раз на категорию, не на позицию/ряд
+       SELECT DISTINCT p.category_id,
+              category_sort_path(p.category_id) AS csp,
+              category_path(p.category_id)      AS cpath
+       FROM pos_page pp JOIN position p ON p.id = pp.position_id
+   )
+   SELECT p.id AS position_id, p.name AS position_name, c.cpath AS category_path,
+          c.csp, p.sort_order
+   FROM pos_page pp
+   JOIN position p ON p.id = pp.position_id
+   JOIN cats c     ON c.category_id = p.category_id
+   ORDER BY c.csp, p.sort_order, p.id           -- csp: int[] preorder, сравнение поэлементно
    LIMIT :limit OFFSET :offset
    ```
-   `total` — `count` тех же различных позиций (без `LIMIT`).
+   `total` — `count(*)` из `pos_page` (те же различные позиции, без `LIMIT`).
+   `position.category_id NOT NULL` ⇒ `csp`/`cpath` всегда заданы, `NULLS LAST` не нужен.
 2. **Ячейки страницы** — все ряды `listing_live` для этих `position_id` под фильтром
    `building_type` (+`segment_id` если сужено), **без `q`**: поиск отбирает, *какие
    позиции* показать, но строка позиции отдаётся **целиком** (иначе матрица порвётся).
@@ -128,6 +143,13 @@ class Matrix(BaseModel):
 3. **Колонки** — сегменты `building_type` (+`segment_id` если сужено) с их
    `segment_group`, порядок `group.sort_order, segment.sort_order`, свёрнутые в
    `MatrixColumnGroup` (сегменты без группы → `group=None`).
+
+**Семантика `q` (зафиксировать, не «чинить»):** `q` фильтрует **только шаг 1** —
+отбирает позиции, у которых под текущим фильтром сегментов есть совпадение по
+`position_name`/`vendor_name`/`category_path`. Совпадение по `vendor_name` означает
+«показать позицию целиком, раз вендор встречается хоть в одном её классе», а не
+«подсветить ячейки с вендором» — подсветки совпавших ячеек в v1 **нет**. Шаг 2
+намеренно **не** применяет `q`; фильтровать его по `q` = порвать строку.
 
 ### Миграция: `category_sort_path(category_id) RETURNS int[]`
 
@@ -163,9 +185,13 @@ Postgres поэлементно-лексикографично). **Новой Al
 - TanStack Table: колонки из `columns` payload (`columnHelper.group` для сегментов с
   группой, плоские leaf для `group=None`); row model — `items`; **строка-заголовок
   раздела** инъектируется на смене `category_path` (spanning-ряд, печатает полный путь).
+  **Решение (не баг):** раздел, попавший на границу страниц, печатает заголовок на
+  обеих (конец стр. N и начало стр. N+1) — это желаемо, даёт контекст на новой странице.
 - Ячейка: вендоры → `Badge`-чипы (звезда для `starred`, маркер Ujin), требование →
   текст/`Badge`, пусто → `—`. Поиск — с дебаунсом, пишет в URL.
-- Серверная пагинация: контролы меняют `offset` в URL.
+- Серверная пагинация: контролы меняют `offset` в URL. `limit` ≤ 200 позиций; помни
+  верхнюю границу payload: 200 × сегменты × вендоры-в-ячейке (на офисе крупнее) —
+  не блокер на v1, но потолок известен.
 
 ### Срез DS-компонентов (первые слайсы, только эти три)
 
@@ -193,6 +219,11 @@ shadcn), каждый со своим vitest. Ничего сверх нужно
 
 1. Миграция `category_sort_path` + db-тест.
 2. Эндпоинт `/listings/matrix` (схемы + роутер + выборка) + db/api-тесты; `just types`.
+   **Перформанс — часть слайса, не отложено:** выборка шага 1 обязана считать
+   `csp`/путь один раз на различную категорию (CTE выше), а не тянуть `category_path`
+   из `listing_live` (та считает рекурсию на каждый listing-ряд под фильтром). Иначе
+   первый же реальный сид тормозит, и это спишут на архитектуру. db-тест фиксирует
+   форму запроса (одна `pos_page`-CTE, `DISTINCT position_id`).
 3. DS-компоненты `table`/`badge`/`card` + vitest.
 4. Роутинг (TanStack Router) + перенос витрины DS на `/design-system`.
 5. Экран матрицы (фильтры, дерево-заголовки, ячейки, пагинация) + Vitest/MSW.
@@ -212,6 +243,7 @@ shadcn), каждый со своим vitest. Ничего сверх нужно
 ## TECH_DEBT (внести при реализации)
 
 - **Сворачиваемое дерево разделов** — v1 показывает плоские строки-заголовки.
-- **Рекурсивные `category_path`/`category_sort_path` на строку** — сортировка тысяч
-  позиций по их результату на каждой странице; кандидат на материализацию (доп.
-  колонка/materialized view), если проявится нагрузка.
+- **Рекурсивные `category_path`/`category_sort_path`.** v1 уже сводит вызовы к
+  O(различные категории) на запрос (CTE `cats`). Долгосрочно, если и это станет
+  узким местом на больших деревьях — материализация пути (доп. колонка на `category`
+  с триггерным пересчётом / materialized view). Пока не требуется.
