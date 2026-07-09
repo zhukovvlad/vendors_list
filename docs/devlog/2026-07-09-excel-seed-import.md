@@ -1,6 +1,7 @@
 # 2026-07-09 — Разовый сид-импорт 3 стартовых Excel в живые таблицы
 
-Ветка `feat/excel-seed-import`. Реализовано по методике
+Ветка `feat/excel-seed-import` → PR [#5](https://github.com/zhukovvlad/vendors_list/pull/5).
+Реализовано по методике
 subagent-driven-development (план
 [docs/superpowers/plans/2026-07-09-excel-seed-import.md](../superpowers/plans/2026-07-09-excel-seed-import.md),
 спека
