@@ -37,7 +37,10 @@ async def test_deterministic_on_duplicate_sort_order(db_conn) -> None:
     root = await f.make_category(db_conn, name="Корень")
     a = await f.make_category(db_conn, name="A", parent_id=root)
     b = await f.make_category(db_conn, name="B", parent_id=root)
-    await db_conn.execute(text("UPDATE category SET sort_order = 5 WHERE id IN (:a, :b)"), {"a": a, "b": b})
+    await db_conn.execute(
+        text("UPDATE category SET sort_order = 5 WHERE id IN (:a, :b)"),
+        {"a": a, "b": b},
+    )
     csp_a = await _csp(db_conn, a)
     csp_b = await _csp(db_conn, b)
     assert csp_a < csp_b  # a.id < b.id → детерминировано, не случайно
