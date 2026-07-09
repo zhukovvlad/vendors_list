@@ -159,9 +159,15 @@ def _pos_without_heading(path: str, rr: ReadRow) -> SeedError:
 
 # Порядок УДАЛЕНИЯ (дети → родители). DELETE, НЕ TRUNCATE CASCADE — чтобы
 # гарантированно не задеть compliance.project* (§14, требование ревьюера).
+# Аудируемую таблицу удаляем ПЕРЕД её журналом (listing→change_log,
+# agreement→agreement_change_log): DELETE аудируемой таблицы срабатывает AFTER-DELETE-
+# триггером и пишет 'delete'-строки в журнал, которые затем стирает DELETE журнала.
+# Иначе журнал очищается раньше, а последующий DELETE родителя плодит осиротевшие
+# строки (у agreement_change_log нет FK на agreement) — накапливались бы на ре-сид.
 _RESET_ORDER = (
-    "release_listing", "release", "listing", "change_log", "agreement_change_log",
-    "agreement", "position", "vendor_alias", "vendor", "category",
+    "release_listing", "release", "listing", "change_log",
+    "agreement", "agreement_change_log",
+    "position", "vendor_alias", "vendor", "category",
 )
 
 

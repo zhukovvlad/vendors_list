@@ -383,9 +383,14 @@ current_app_user()` — §15), `listing_cell_chk` (инвариант), `listing
    не гоняют.
 2. **Сброс — `DELETE` в FK-порядке** (решено на этапе плана, НЕ `TRUNCATE
    CASCADE`): `release_listing`, `release`, `listing`, `change_log`,
-   `agreement_change_log`, `agreement`, `position`, `vendor_alias`, `vendor`,
+   `agreement`, `agreement_change_log`, `position`, `vendor_alias`, `vendor`,
    `category`. `building_type`/`segment`/`segment_group` **не трогаем** (сид
    схемы). serial-id при `DELETE` не сбрасываются — по §14 не контракт.
+   Аудируемую таблицу удаляем ПЕРЕД её журналом (`listing`→`change_log`,
+   `agreement`→`agreement_change_log`): её `DELETE` пишет 'delete'-строки в
+   журнал через AFTER-DELETE-триггер, и следующий `DELETE` журнала их стирает —
+   иначе (журнал раньше родителя) на каждый ре-сид копились бы осиротевшие
+   строки в `agreement_change_log` (у него нет FK на `agreement`).
 
    **Требование ревьюера к `--force` (жёсткое) — выполнено конструкцией:**
    `--force` снимает только проверку п.1, но **НИ ПРИ КАКИХ УСЛОВИЯХ** сброс не
