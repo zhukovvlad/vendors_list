@@ -54,6 +54,53 @@ class ListingRow(BaseModel):
     updated_by: str
 
 
+# --- Матрица перечня (server pivot над listing_live) ------------------------
+class MatrixVendorRef(BaseModel):
+    vendor_id: int
+    name: str
+    starred: bool          # = vendor_starred, как есть
+    ujin_integration: bool
+    note: str | None       # per-vendor (атрибут ряда)
+
+
+class MatrixCell(BaseModel):
+    segment_id: int
+    vendors: list[MatrixVendorRef]  # непусто ⇒ вендорная ячейка
+    spec_text: str | None           # требование (vendor NULL)
+    note: str | None                # значим только для ячейки-требования
+
+
+class MatrixRow(BaseModel):
+    position_id: int
+    position_name: str
+    category_path: str              # position.category_id NOT NULL ⇒ путь всегда есть
+    cells: list[MatrixCell]
+
+
+class SegmentRef(BaseModel):
+    id: int
+    name: str
+    sort_order: int
+
+
+class SegmentGroupRef(BaseModel):
+    id: int
+    name: str
+
+
+class MatrixColumnGroup(BaseModel):
+    group: SegmentGroupRef | None   # None ⇒ плоские leaf-колонки (жилые/социальные)
+    segments: list[SegmentRef]
+
+
+class Matrix(BaseModel):
+    columns: list[MatrixColumnGroup]
+    items: list[MatrixRow]
+    total: int                      # число РАЗЛИЧНЫХ позиций под фильтром
+    limit: int
+    offset: int
+
+
 T = TypeVar("T")
 
 
