@@ -66,7 +66,8 @@ types:
     cd {{backend}}; uv run python -m scripts.export_openapi
     npx --yes openapi-typescript {{backend}}/openapi.json -o {{frontend}}/src/api/schema.d.ts
 
-# Сид живых таблиц из стартовых Excel (temp/). Пример: just seed --dry-run
+# Сид живых таблиц из стартовых Excel (temp/). Боевая запись ТОЛЬКО с --yes;
+# без флагов — отказ (страховка). Предпросмотр: just seed --dry-run (или seed-verify).
 seed *args:
     cd {{backend}}; uv run python -m scripts.seed_vendors {{args}}
 

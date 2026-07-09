@@ -36,7 +36,24 @@ def main() -> int:
     ap.add_argument("--freeze", action="store_true", help="заморозить первое издание (дефолт выкл)")
     ap.add_argument("--force", action="store_true", help="перезаписать при существующих проектах")
     ap.add_argument("--verify", action="store_true", help="сверить счётчики с калибровкой §19")
+    ap.add_argument(
+        "--yes",
+        action="store_true",
+        help="подтвердить РЕАЛЬНУЮ запись в БД; без него боевой прогон запрещён",
+    )
     args = ap.parse_args()
+
+    # Страховка от случайного `just seed`: реальная запись в БД (перезагрузка
+    # таблиц стандартов) выполняется только с явным --yes. Иначе — отказ с
+    # подсказкой. --dry-run/--verify к БД не подключаются и разрешены без --yes.
+    if not args.dry_run and not args.yes:
+        print(
+            "Отказ: боевой прогон перезапишет таблицы стандартов в БД. "
+            "Повторите с --yes для реальной записи, либо с --dry-run для "
+            "безопасного предпросмотра (или `just seed-verify`).",
+            file=sys.stderr,
+        )
+        return 2
 
     if args.files:
         files = args.files
