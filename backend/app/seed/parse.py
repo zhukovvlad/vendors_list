@@ -112,3 +112,50 @@ def parse_vendor_token(token: str) -> ParsedVendor:
             note = inner
             name = name[: m.start()].strip()
     return ParsedVendor(name=_collapse_ws(name), starred=starred, ujin=ujin, note=note)
+
+
+DASHES = frozenset({"-", "—", "–"})
+_REQ_EXACT = frozenset({"россия"})
+_REQ_PREFIX = ("по согласованию",)
+_TOKEN_SPLIT = re.compile(r",(?![^(]*\))")
+
+
+@dataclass(frozen=True)
+class CellListing:
+    status: str
+    vendor_name: str | None
+    starred: bool
+    ujin: bool
+    spec_text: str | None
+    note: str | None
+    sort_order: int
+
+
+def match_requirement(text: str) -> bool:
+    low = _collapse_ws(text).lower()
+    return low in _REQ_EXACT or low.startswith(_REQ_PREFIX)
+
+
+def split_vendor_tokens(cell_text: str) -> list[str]:
+    return [t.strip() for t in _TOKEN_SPLIT.split(cell_text) if t.strip()]
+
+
+def classify_cell(cell_text: str) -> list[CellListing]:
+    text = cell_text.strip()
+    if text in DASHES:
+        return [CellListing("not_applicable", None, False, False, None, None, 0)]
+    if match_requirement(text):
+        return [CellListing("requirement", None, False, False, text, None, 0)]
+    tokens = split_vendor_tokens(text)
+    req_note: str | None = None
+    if len(tokens) > 1 and match_requirement(tokens[0]):
+        req_note = f"Требование: {tokens[0]}"
+        tokens = tokens[1:]
+    out: list[CellListing] = []
+    for i, tok in enumerate(tokens):
+        pv = parse_vendor_token(tok)
+        note = pv.note
+        if req_note:
+            note = f"{req_note}; {note}" if note else req_note
+        out.append(CellListing("allowed", pv.name, pv.starred, pv.ujin, None, note, i))
+    return out

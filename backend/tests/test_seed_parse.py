@@ -3,12 +3,16 @@ from __future__ import annotations
 import pytest
 
 from app.seed.parse import (
+    CellListing,
     ParsedVendor,
     RowKind,
     SeedError,
+    classify_cell,
     classify_row,
+    match_requirement,
     parse_heading_number,
     parse_vendor_token,
+    split_vendor_tokens,
 )
 
 
@@ -70,3 +74,46 @@ def test_parse_vendor_token(
 ) -> None:
     pv = parse_vendor_token(token)
     assert pv == ParsedVendor(name=name, starred=starred, ujin=ujin, note=note)
+
+
+def test_dash_cell() -> None:
+    out = classify_cell("-")
+    assert out == [CellListing("not_applicable", None, False, False, None, None, 0)]
+
+
+def test_requirement_whole_cell() -> None:
+    assert classify_cell("Россия") == [
+        CellListing("requirement", None, False, False, "Россия", None, 0)
+    ]
+    assert classify_cell("По согласованию с Мосэнергосбыт")[0].status == "requirement"
+
+
+def test_gost_is_not_a_requirement() -> None:
+    # ГОСТ встречается только внутри названий продуктов, не как маркер-ячейка
+    assert not match_requirement("Трубы стальные ГОСТ 3262-75")
+
+
+def test_comma_inside_parens_does_not_split() -> None:
+    assert split_vendor_tokens("Midea (Bosch, Clivet)") == ["Midea (Bosch, Clivet)"]
+
+
+def test_vendor_list_sort_order() -> None:
+    out = classify_cell("Ридан, SWEP, ТеплоСила*")
+    assert [(c.vendor_name, c.sort_order, c.starred) for c in out] == [
+        ("Ридан", 0, False),
+        ("SWEP", 1, False),
+        ("ТеплоСила", 2, True),
+    ]
+    assert all(c.status == "allowed" for c in out)
+
+
+def test_mixed_cell_requirement_into_note() -> None:
+    # 'Россия, <вендоры>' → список вендоров + 'Требование: Россия' в note каждого (§8.4)
+    out = classify_cell("Россия, Aquatherm green pipe sdr11*, sdr9(faser)")
+    assert [c.vendor_name for c in out] == ["Aquatherm green pipe sdr11", "sdr9(faser)"]
+    assert all(c.note == "Требование: Россия" for c in out)
+    assert out[0].starred is True
+    # инвариант ячейки: смешанная ячейка даёт ТОЛЬКО allowed-строки, без мета-строки
+    # (иначе триггер listing_cell_chk отверг бы вендоры + мета вместе)
+    assert all(c.status == "allowed" for c in out)
+    assert all(c.vendor_name is not None and c.spec_text is None for c in out)
