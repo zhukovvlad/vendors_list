@@ -66,6 +66,14 @@ types:
     cd {{backend}}; uv run python -m scripts.export_openapi
     npx --yes openapi-typescript {{backend}}/openapi.json -o {{frontend}}/src/api/schema.d.ts
 
+# Сид живых таблиц из стартовых Excel (temp/). Пример: just seed --dry-run
+seed *args:
+    cd {{backend}}; uv run python -m scripts.seed_vendors {{args}}
+
+# Ручная калибровка парсера на 3 реальных файлах (dry-run + сверка). НЕ в CI.
+seed-verify:
+    cd {{backend}}; uv run python -m scripts.seed_vendors --dry-run --verify
+
 # Линтинг бэкенда (ruff) и фронтенда (eslint + prettier --check).
 lint:
     cd {{backend}}; uv run ruff check .
