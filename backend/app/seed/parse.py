@@ -159,3 +159,41 @@ def classify_cell(cell_text: str) -> list[CellListing]:
             note = f"{req_note}; {note}" if note else req_note
         out.append(CellListing("allowed", pv.name, pv.starred, pv.ujin, None, note, i))
     return out
+
+
+@dataclass(frozen=True)
+class CategoryNode:
+    number: tuple[int, ...]
+    name: str
+    parent: tuple[int, ...] | None
+    sort_order: int
+
+
+class CategoryTree:
+    """Объединённое дерево разделов. Идентичность узла — числовой путь (§6)."""
+
+    def __init__(self) -> None:
+        self._nodes: dict[tuple[int, ...], CategoryNode] = {}
+        self.warnings: list[str] = []
+
+    def add(self, number: tuple[int, ...], name: str, *, file_label: str) -> None:
+        existing = self._nodes.get(number)
+        if existing is not None:
+            if existing.name != name:
+                path = ".".join(str(x) for x in number)
+                self.warnings.append(
+                    f"Категория {path}: конфликт имени ({file_label} даёт {name!r}, "
+                    f"оставлено {existing.name!r})"
+                )
+            return
+        parent = number[:-1] if len(number) > 1 else None
+        self._nodes[number] = CategoryNode(number, name, parent, number[-1])
+
+    def integrity_check(self) -> None:
+        for number in self._nodes:
+            if len(number) > 1 and number[:-1] not in self._nodes:
+                path = ".".join(str(x) for x in number)
+                raise SeedError(f"Дерево разорвано: у узла {path} нет родителя")
+
+    def ordered(self) -> list[CategoryNode]:
+        return [self._nodes[k] for k in sorted(self._nodes)]  # префиксный порядок = родители раньше

@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.seed.parse import (
+    CategoryTree,
     CellListing,
     ParsedVendor,
     RowKind,
@@ -117,3 +118,31 @@ def test_mixed_cell_requirement_into_note() -> None:
     # (иначе триггер listing_cell_chk отверг бы вендоры + мета вместе)
     assert all(c.status == "allowed" for c in out)
     assert all(c.vendor_name is not None and c.spec_text is None for c in out)
+
+
+def test_category_tree_parent_and_order() -> None:
+    t = CategoryTree()
+    t.add((1,), "Оборудование", file_label="жилой")
+    t.add((1, 1), "Инженерное оборудование", file_label="жилой")
+    t.add((1, 1, 1), "Отопление", file_label="жилой")
+    nodes = t.ordered()
+    assert [n.number for n in nodes] == [(1,), (1, 1), (1, 1, 1)]
+    assert nodes[2].parent == (1, 1)
+    assert nodes[0].parent is None
+    assert nodes[1].sort_order == 1
+
+
+def test_category_dedup_by_number_first_name_wins_and_warns() -> None:
+    t = CategoryTree()
+    t.add((1, 1, 1), "Отопление, Вентиляция и Кондиционирование", file_label="жилой")
+    t.add((1, 1, 1), "Отопление, Вентиляция и кондиционирование", file_label="соц")
+    assert len([n for n in t.ordered() if n.number == (1, 1, 1)]) == 1
+    assert t.ordered()[0].name == "Отопление, Вентиляция и Кондиционирование"
+    assert any("1.1.1" in w for w in t.warnings)
+
+
+def test_category_broken_tree_raises() -> None:
+    t = CategoryTree()
+    t.add((2, 4), "Благоустройство", file_label="офис")  # нет родителя (2,)
+    with pytest.raises(SeedError, match="2.4"):
+        t.integrity_check()
