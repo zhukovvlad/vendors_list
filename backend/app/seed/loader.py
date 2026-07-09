@@ -294,7 +294,12 @@ async def execute(
     )
     seg_id: dict[tuple[str, str], int] = {(r.code, r.name): r.id for r in seg_rows}
 
-    # 8. Листинги (триггеры проставят автора/аудит/инвариант ячейки)
+    # 8. Листинги — предпроход собирает параметры и валидирует segment-ключ
+    #    (нельзя валидировать посреди executemany), затем один batch. Триггеры
+    #    listing_stamp/listing_audit/listing_cell_chk срабатывают построчно и при
+    #    executemany — аудит и инвариант ячейки сохранены. Все dict'ы одной пачки
+    #    имеют идентичный набор ключей (требование prepared statement).
+    listing_params = []
     for ln in plan.listings:
         key = (ln.building_type, ln.segment_name)
         if key not in seg_id:
@@ -303,14 +308,18 @@ async def execute(
                 f"Класс {ln.segment_name!r} ({ln.building_type}) не найден в segment. "
                 f"Доступны: {avail}"
             )
+        listing_params.append(
+            {"p": pos_id[ln.pos_key], "seg": seg_id[key],
+             "v": vendor_id[ln.vendor_name] if ln.vendor_name else None,
+             "st": ln.status, "spec": ln.spec_text, "ujin": ln.ujin,
+             "note": ln.note, "so": ln.sort_order}
+        )
+    if listing_params:
         await conn.execute(
             text("INSERT INTO listing(position_id, segment_id, vendor_id, status, "
                  "spec_text, ujin_integration, note, sort_order) "
                  "VALUES (:p, :seg, :v, :st, :spec, :ujin, :note, :so)"),
-            {"p": pos_id[ln.pos_key], "seg": seg_id[key],
-             "v": vendor_id[ln.vendor_name] if ln.vendor_name else None,
-             "st": ln.status, "spec": ln.spec_text, "ujin": ln.ujin,
-             "note": ln.note, "so": ln.sort_order},
+            listing_params,
         )
 
     # 9. Опциональная фиксация первого издания (по умолчанию выкл, §13)
