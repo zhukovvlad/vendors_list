@@ -99,6 +99,8 @@ async def listing_matrix(
     conn: AsyncConnection = Depends(read_conn),
 ) -> Matrix:
     seg_f = "AND ll.segment_id = :seg" if segment_id is not None else ""
+    # Пустая строка q — falsy, трактуется как «без фильтра» (согласовано с фронтом:
+    # `q: search.q || undefined`).
     q_f = (
         "AND (ll.position_name ILIKE :q OR ll.vendor_name ILIKE :q OR ll.category_path ILIKE :q)"
         if q
@@ -132,10 +134,11 @@ async def listing_matrix(
                       {seg_f} {q_f}
                 ),
                 cats AS (
-                    SELECT DISTINCT p.category_id,
-                           category_sort_path(p.category_id) AS csp,
-                           category_path(p.category_id)      AS cpath
-                    FROM pos_page pp JOIN position p ON p.id = pp.position_id
+                    SELECT d.category_id,
+                           category_sort_path(d.category_id) AS csp,
+                           category_path(d.category_id)      AS cpath
+                    FROM (SELECT DISTINCT p.category_id
+                          FROM pos_page pp JOIN position p ON p.id = pp.position_id) d
                 )
                 SELECT p.id AS position_id, p.name AS position_name, c.cpath AS category_path
                 FROM pos_page pp

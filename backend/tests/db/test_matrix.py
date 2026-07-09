@@ -3,24 +3,10 @@
 свежесозданным данным (БД штатно заполнена сидом)."""
 
 import pytest
-from sqlalchemy import text
 
 from tests import factories as f
 
 pytestmark = pytest.mark.db
-
-
-async def _office_segments(db_conn):
-    """id классов офиса: (Prime, Класс А, Класс B — группа 'Офисные здания'), ТРЦ."""
-    rows = (
-        await db_conn.execute(
-            text(
-                "SELECT s.name, s.id FROM segment s "
-                "JOIN building_type bt ON bt.id = s.building_type_id WHERE bt.code = 'office'"
-            )
-        )
-    ).all()
-    return {name: sid for name, sid in rows}
 
 
 async def test_row_not_torn_and_star_as_is(client, as_viewer, db_conn) -> None:
