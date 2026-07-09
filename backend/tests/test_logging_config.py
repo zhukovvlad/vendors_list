@@ -94,3 +94,11 @@ def test_uvicorn_access_muted_and_propagates(clean_logging):
 def test_sqlalchemy_engine_muted(clean_logging):
     setup_logging()
     assert logging.getLogger("sqlalchemy.engine").level == logging.WARNING
+
+
+def test_invalid_log_level_falls_back_to_info(clean_logging, monkeypatch):
+    # Невалидный LOG_LEVEL не роняет старт (иначе ValueError из setLevel) — откат на INFO.
+    monkeypatch.setenv("LOG_LEVEL", "VERBOSE")
+    setup_logging()  # не должно бросить
+    console = logging.getLogger().handlers[0]
+    assert console.level == logging.INFO

@@ -58,7 +58,10 @@ def setup_logging() -> None:
     if _configured:
         return
 
-    level = os.getenv("LOG_LEVEL", "INFO").upper()
+    # Невалидный LOG_LEVEL не роняет старт (setLevel кинул бы ValueError), но и не
+    # глотается молча: откат на INFO + WARNING ниже, называющий плохое значение.
+    raw_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    level = raw_level if raw_level in logging.getLevelNamesMapping() else "INFO"
     to_file = os.getenv("LOG_TO_FILE", "1") != "0"
     log_dir = Path(os.getenv("LOG_DIR", str(_default_log_dir())))
 
@@ -118,6 +121,9 @@ def setup_logging() -> None:
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
     _configured = True
-    logging.getLogger(__name__).info(
+    log = logging.getLogger(__name__)
+    if level != raw_level:
+        log.warning("Неизвестный LOG_LEVEL=%r — откат на INFO", raw_level)
+    log.info(
         "Логирование инициализировано (level=%s, to_file=%s, dir=%s)", level, to_file, log_dir
     )
