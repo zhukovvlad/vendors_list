@@ -1,7 +1,14 @@
 import { render, screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./table"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./table"
 
 describe("Table", () => {
   it("рендерит семантическую таблицу с ячейками", () => {
@@ -19,7 +26,9 @@ describe("Table", () => {
         </TableBody>
       </Table>
     )
-    expect(screen.getByRole("columnheader", { name: "Позиция" })).toBeInTheDocument()
+    expect(
+      screen.getByRole("columnheader", { name: "Позиция" })
+    ).toBeInTheDocument()
     expect(screen.getByRole("cell", { name: "Насосы" })).toBeInTheDocument()
   })
 })
