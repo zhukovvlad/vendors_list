@@ -189,7 +189,7 @@ export function MatrixScreen() {
             navigate({
               search: (p) => ({
                 ...p,
-                offset: Math.max(0, p.offset - PAGE_SIZE),
+                offset: Math.max(0, ("offset" in p ? p.offset : 0) - PAGE_SIZE),
               }),
             })
           }
@@ -203,7 +203,10 @@ export function MatrixScreen() {
           }
           onClick={() =>
             navigate({
-              search: (p) => ({ ...p, offset: p.offset + PAGE_SIZE }),
+              search: (p) => ({
+                ...p,
+                offset: ("offset" in p ? p.offset : 0) + PAGE_SIZE,
+              }),
             })
           }
         >

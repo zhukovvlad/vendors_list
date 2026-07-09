@@ -30,7 +30,8 @@ export const matrixRoute = createRoute({
     // после резолва /meta/building-types. Пустой список → без редиректа (пустое
     // состояние отрисует экран).
     if (deps.building_type_id === undefined) {
-      const { data } = await api.GET("/meta/building-types")
+      const { data, error } = await api.GET("/meta/building-types")
+      if (error) throw error
       const first = data?.[0]
       if (first) {
         throw redirect({

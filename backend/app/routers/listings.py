@@ -218,7 +218,7 @@ async def listing_matrix(
                 FROM segment s
                 LEFT JOIN segment_group sg ON sg.id = s.group_id
                 WHERE s.building_type_id = :bt {col_seg_f}
-                ORDER BY COALESCE(sg.sort_order, -1), s.sort_order, s.id
+                ORDER BY COALESCE(sg.sort_order, -1), sg.id, s.sort_order, s.id
                 """
             ),
             col_params,
