@@ -34,6 +34,7 @@ backend/openapi.json
 coverage/
 htmlcov/
 .coverage
+backend/logs/
 
 # --- Local inputs / scratch (исходные Excel, дизайн-хендофф) ---
 /temp/

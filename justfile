@@ -55,7 +55,7 @@ makemigration name:
 
 # Запуск FastAPI (hot-reload) в виртуальном окружении. API на :8000, /docs.
 dev-back:
-    cd {{backend}}; uv run uvicorn app.main:app --reload --port 8000
+    cd {{backend}}; $env:LOG_LEVEL = if ($env:LOG_LEVEL) { $env:LOG_LEVEL } else { 'INFO' }; uv run uvicorn app.main:app --reload --port 8000
 
 # Запуск Vite dev-сервера (:5173, проксирует /api -> :8000).
 dev-front:
@@ -69,7 +69,7 @@ types:
 # Сид живых таблиц из стартовых Excel (temp/). Боевая запись ТОЛЬКО с --yes;
 # без флагов — отказ (страховка). Предпросмотр: just seed --dry-run (или seed-verify).
 seed *args:
-    cd {{backend}}; uv run python -m scripts.seed_vendors {{args}}
+    cd {{backend}}; $env:LOG_LEVEL = if ($env:LOG_LEVEL) { $env:LOG_LEVEL } else { 'INFO' }; uv run python -m scripts.seed_vendors {{args}}
 
 # Ручная калибровка парсера на 3 реальных файлах (dry-run + сверка). НЕ в CI.
 seed-verify:
@@ -93,7 +93,7 @@ typecheck:
 
 # Тесты: бэкенд (pytest, db-тесты скипаются без DATABASE_URL_TEST) + фронт (vitest).
 test:
-    cd {{backend}}; uv run pytest
+    cd {{backend}}; $env:LOG_TO_FILE = '0'; uv run pytest
     cd {{frontend}}; npm run test
 
 # Production-сборка фронтенда.

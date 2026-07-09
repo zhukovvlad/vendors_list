@@ -50,6 +50,20 @@ just dev-front   # фронтенд  -> http://localhost:5173
 пользователем (`AUTH_DEV_USER`, роль `AUTH_DEV_ROLE`) без реального SSO.
 В проде bypass ЗАПРЕЩЁН — приложение упадёт при старте, если он включён.
 
+## Логирование
+
+Централизованная настройка — `app.logging_config.setup_logging()` (консоль +
+ротируемые `backend/logs/app.log`, `errors.log`), корреляция запросов через
+`X-Request-ID`.
+
+**Правило env-only настроек.** `LOG_LEVEL`, `LOG_TO_FILE`, `LOG_DIR` читаются
+через `os.getenv`, а НЕ через Settings. pydantic-settings читает `backend/.env`
+самостоятельно и **не** наполняет `os.environ` — поэтому значения из `.env` для
+`os.getenv` невидимы. Задавать их нужно реальным окружением или через
+just-рецепты (`dev-back`/`seed` ставят `LOG_LEVEL=INFO` по умолчанию,
+переопределяется реальным env). Разовый DEBUG: `$env:LOG_LEVEL='DEBUG'; just dev-back`.
+Это правило общее для всех env-only настроек, не только логов.
+
 ## Полезные команды
 
 ```bash
