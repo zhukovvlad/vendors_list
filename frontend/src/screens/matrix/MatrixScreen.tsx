@@ -3,7 +3,7 @@ import {
   useReactTable,
   flexRender,
 } from "@tanstack/react-table"
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { matrixRoute } from "@/router"
 import { useMatrix, useBuildingTypes, useSegments } from "@/api/queries"
@@ -37,6 +37,29 @@ export function MatrixScreen() {
     limit: PAGE_SIZE,
     offset: search.offset,
   })
+
+  // Поиск: инпут контролируется ЛОКАЛЬНЫМ состоянием, а не search.q. navigate у
+  // TanStack Router асинхронный — если привязать value прямо к search.q, при
+  // быстром вводе значение "отскакивает" (search.q не успевает обновиться), и поле
+  // подвисает. Локальное состояние обновляется синхронно; в URL пишем с дебаунсом.
+  const [qInput, setQInput] = useState(search.q ?? "")
+
+  // Синхронизация из URL (back/forward, внешняя навигация).
+  useEffect(() => {
+    setQInput(search.q ?? "")
+  }, [search.q])
+
+  // Дебаунс: локальный ввод → URL (не на каждый символ). Гвард qInput === search.q
+  // не даёт двум эффектам зациклиться.
+  useEffect(() => {
+    if (qInput === (search.q ?? "")) return
+    const t = setTimeout(() => {
+      navigate({
+        search: (p) => ({ ...p, q: qInput || undefined, offset: 0 }),
+      })
+    }, 300)
+    return () => clearTimeout(t)
+  }, [qInput, search.q, navigate])
 
   const columns = useMemo(
     () => buildColumnDefs(matrix.data?.columns ?? []),
@@ -121,14 +144,9 @@ export function MatrixScreen() {
             Поиск
             <input
               className="rounded-md border border-border bg-background px-2 py-1 text-body text-foreground"
-              value={search.q ?? ""}
+              value={qInput}
               placeholder="позиция / вендор / раздел"
-              onChange={(e) => {
-                const val = e.target.value
-                navigate({
-                  search: (p) => ({ ...p, q: val || undefined, offset: 0 }),
-                })
-              }}
+              onChange={(e) => setQInput(e.target.value)}
             />
           </label>
         </CardContent>

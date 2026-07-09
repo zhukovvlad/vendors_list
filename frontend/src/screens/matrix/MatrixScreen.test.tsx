@@ -46,6 +46,24 @@ describe("MatrixScreen", () => {
     expect(within(table).getByText("Эконом")).toBeInTheDocument()
   })
 
+  it("поиск: быстрый ввод не отскакивает (локальное состояние) и пишет q в URL с дебаунсом", async () => {
+    // Регресс: value={search.q} + асинхронный navigate роутера сбрасывали ввод
+    // при быстрой печати (поле «зависало»). Инпут обязан управляться локальным
+    // состоянием (синхронно), а URL — обновляться дебаунсом.
+    const router = makeRouter()
+    renderWith(router)
+    await screen.findByText("Насосы")
+    const input = screen.getByPlaceholderText("позиция / вендор / раздел")
+    await userEvent.type(input, "насос")
+    expect(input).toHaveValue("насос") // синхронно, не отскочило
+    await waitFor(() =>
+      expect(router.state.location.search).toMatchObject({
+        q: "насос",
+        offset: 0,
+      })
+    )
+  })
+
   it("серверная пагинация: клик «Вперёд» увеличивает offset в URL на PAGE_SIZE", async () => {
     server.use(
       http.get("/api/listings/matrix", () =>
