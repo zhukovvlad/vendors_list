@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from app.seed.parse import (
-    RowClass,
     RowKind,
     SeedError,
     classify_row,
@@ -18,7 +17,8 @@ from app.seed.parse import (
         ("1.1. Инженерное оборудование", "", RowKind.HEADING, (1, 1), "Инженерное оборудование"),
         ("1.1.1. Отопление", None, RowKind.HEADING, (1, 1, 1), "Отопление"),
         (1, "Пластинчатый теплообменник", RowKind.POSITION, None, "Пластинчатый теплообменник"),
-        ("=A8+1", "Насос", RowKind.POSITION, None, "Насос"),  # контракт parse для формулы-строки; reader (data_only=True) её не отдаёт
+        # контракт parse для формулы-строки; reader (data_only=True) её не отдаёт
+        ("=A8+1", "Насос", RowKind.POSITION, None, "Насос"),
         ("Примечание: Ujin — интеграция", None, RowKind.FOOTNOTE, None, None),
         (None, None, RowKind.BLANK, None, None),
         ("", "", RowKind.BLANK, None, None),
