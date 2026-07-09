@@ -55,7 +55,8 @@ class RunReport:
             "\n--- Итого ---",
             f"  категорий в дереве: {self.categories}",
             f"  уникальных вендоров: {self.vendors_unique}",
-            f"  соглашений (звёзд): {self.agreements}; вхождений '*': {self.star_occurrences}",
+            f"  соглашений (звёзд): {self.agreements}; "
+            f"listing со звёздным вендором: {self.star_occurrences}",
         ]
         for w in self.category_warnings:
             lines.append(f"  ⚠ {w}")

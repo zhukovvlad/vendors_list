@@ -13,13 +13,18 @@ from app.seed.loader import run
 _MASKS = ("*жилые*.xlsx", "*офисные*.xlsx", "*социальные*.xlsx")
 
 
-def _default_files() -> list[str]:
-    here = os.path.dirname(os.path.abspath(__file__))
-    temp = os.path.normpath(os.path.join(here, "..", "..", "temp"))
+def _default_files(temp: str | None = None) -> list[str]:
+    if temp is None:
+        here = os.path.dirname(os.path.abspath(__file__))
+        temp = os.path.normpath(os.path.join(here, "..", "..", "temp"))
     found: list[str] = []
     for mask in _MASKS:
         hits = [p for p in glob.glob(os.path.join(temp, mask)) if "~$" not in p]
-        found.extend(hits)
+        if len(hits) != 1:
+            raise RuntimeError(
+                f"Ожидался ровно 1 файл по маске {mask!r} в {temp!r}, найдено {len(hits)}: {hits}"
+            )
+        found.append(hits[0])
     return found
 
 
@@ -33,7 +38,14 @@ def main() -> int:
     ap.add_argument("--verify", action="store_true", help="сверить счётчики с калибровкой §19")
     args = ap.parse_args()
 
-    files = args.files or _default_files()
+    if args.files:
+        files = args.files
+    else:
+        try:
+            files = _default_files()
+        except RuntimeError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
     if not files:
         print("Не найдены входные файлы (ни аргументов, ни temp/*.xlsx).", file=sys.stderr)
         return 2

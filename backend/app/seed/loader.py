@@ -97,7 +97,7 @@ def build_load(paths: list[str]) -> LoadPlan:
             pos_counter += 1
             pos_key = pos_counter
             positions.append(
-                PositionRow(pos_key, current, rr.row.name, rr.row.source_ref, len(positions))
+                PositionRow(pos_key, current, rr.row.name, rr.row.source_ref, fr.positions)
             )
             fr.positions += 1
             for col, cell_text in rr.cells.items():

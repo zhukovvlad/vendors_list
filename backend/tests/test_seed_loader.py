@@ -72,3 +72,24 @@ def test_build_load_dedupes_repeated_vendor_in_cell(tmp_path: Path) -> None:
     assert len(allowed) == 1
     assert plan.vendors == {"Ридан": False}
     assert any("повтор вендора" in w for f in plan.report.files for w in f.warnings)
+
+
+def test_build_load_sort_order_resets_per_file(tmp_path: Path) -> None:
+    # §7: sort_order позиции — порядок В ПРЕДЕЛАХ ФАЙЛА, не глобальный индекс.
+    p1 = tmp_path / "тест жилые.xlsx"
+    p2 = tmp_path / "тест социальные.xlsx"
+    _make(p1, "жилой", "Производители")
+    _make(p2, "соц", "Производители")
+    plan = build_load([str(p1), str(p2)])
+
+    klapan_positions = [p for p in plan.positions if p.name == "Клапан"]
+    # обе позиции 'Клапан' (файл1 и файл2) должны иметь sort_order=1 (второй в своём файле)
+    assert len(klapan_positions) == 2
+    assert [p.sort_order for p in klapan_positions] == [1, 1]
+
+    насос_positions = [p for p in plan.positions if p.name == "Насос"]
+    assert len(насос_positions) == 2
+    assert [p.sort_order for p in насос_positions] == [0, 0]
+
+    # global pos_key продолжает расти сквозным счётчиком (это НЕ sort_order)
+    assert [p.pos_key for p in plan.positions] == [1, 2, 3, 4]

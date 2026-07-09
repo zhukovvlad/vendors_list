@@ -164,6 +164,10 @@ def test_report_render_and_verify() -> None:
                     star_occurrences=582, categories=54, category_warnings=[])
     text = rep.render()
     assert "residential" in text and "266" in text
+    # честная метка: star_occurrences — не счётчик '*' в исходнике, а число
+    # allowed-listing со звёздным вендором
+    assert "listing со звёздным вендором: 582" in text
+    assert "вхождений '*'" not in text
     # калибровка residential сходится → нет расхождений
     assert rep.verify() == []
 
