@@ -609,7 +609,13 @@ Expected: PASS.
 - [ ] **Step 8: Регенерировать TS-типы**
 
 Run: `just types`
-Изменится `frontend/src/api/schema.d.ts` (появится `/listings/matrix` и схемы `Matrix*`). Файл коммить.
+Изменится `frontend/src/api/schema.d.ts` (появится `/listings/matrix` и схемы `Matrix*`).
+
+> **Поправка (по факту реализации):** `frontend/src/api/schema.d.ts` в этом репозитории —
+> **в `.gitignore`** (генерируемый артефакт; `just ci` и CI регенерируют его через
+> openapi-typescript перед typecheck). Коммитить его НЕ нужно и не выйдет — при Step 10
+> просто прогони `just types` локально, чтобы typecheck видел новые типы. Строка
+> `frontend/src/api/schema.d.ts` в `git add` ниже — историческая, фактически no-op.
 
 - [ ] **Step 9: Проверить backend lint/typecheck**
 

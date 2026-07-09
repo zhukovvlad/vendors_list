@@ -59,6 +59,11 @@ export function MatrixScreen() {
   }
 
   const displayRows = withSectionHeaders(matrix.data?.items ?? [])
+  // Сопоставление position_id → строка таблицы один раз (иначе .find() на каждую
+  // отображаемую строку — O(n²) по строкам страницы).
+  const rowByPos = new Map(
+    table.getRowModel().rows.map((r) => [r.original.position_id, r])
+  )
 
   return (
     <div className="flex flex-col gap-4 p-6 text-foreground">
@@ -116,7 +121,7 @@ export function MatrixScreen() {
             Поиск
             <input
               className="rounded-md border border-border bg-background px-2 py-1 text-body text-foreground"
-              defaultValue={search.q ?? ""}
+              value={search.q ?? ""}
               placeholder="позиция / вендор / раздел"
               onChange={(e) => {
                 const val = e.target.value
@@ -160,11 +165,8 @@ export function MatrixScreen() {
               </TableRow>
             ) : (
               <TableRow key={dr.key}>
-                {table
-                  .getRowModel()
-                  .rows.find(
-                    (r) => r.original.position_id === dr.row.position_id
-                  )
+                {rowByPos
+                  .get(dr.row.position_id)
                   ?.getVisibleCells()
                   .map((c) => (
                     <TableCell key={c.id}>
