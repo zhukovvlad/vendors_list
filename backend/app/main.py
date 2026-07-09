@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -16,13 +15,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .db import dispose_engine
+from .logging_config import setup_logging
+from .middleware import RequestIdMiddleware
 from .routers import compliance, listings, meta, releases
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
-    logging.basicConfig(level=settings.log_level)
     if settings.is_prod and settings.auth_dev_bypass:
         raise RuntimeError("AUTH_DEV_BYPASS must be false in production")
     yield
@@ -30,6 +30,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
+    setup_logging()  # первой строкой: create_app выполняется на импорте модуля
     settings = get_settings()
     app = FastAPI(
         title="Vendors API",
@@ -44,6 +45,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # ПОСЛЕ CORS → RequestIdMiddleware становится ВНЕШНИМ (ставит request_id первым).
+    app.add_middleware(RequestIdMiddleware)
 
     @app.get("/health", tags=["meta"])
     async def health() -> dict[str, str]:

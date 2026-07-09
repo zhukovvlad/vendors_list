@@ -8,6 +8,7 @@ import glob
 import os
 import sys
 
+from app.logging_config import setup_logging
 from app.seed.loader import run
 
 _MASKS = ("*жилые*.xlsx", "*офисные*.xlsx", "*социальные*.xlsx")
@@ -29,6 +30,7 @@ def _default_files(temp: str | None = None) -> list[str]:
 
 
 def main() -> int:
+    setup_logging()
     ap = argparse.ArgumentParser(description="Сид вендор-листов из Excel в живые таблицы.")
     ap.add_argument("files", nargs="*", help="пути к .xlsx (по умолчанию — 3 файла из temp/)")
     ap.add_argument("--dry-run", action="store_true", help="только разбор+отчёт, БД не трогаем")

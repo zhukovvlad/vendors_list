@@ -12,7 +12,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_env: str = "dev"
-    log_level: str = "INFO"
 
     # Единственная строка подключения — async-URL приложения (asyncpg).
     # Sync-URL для Alembic выводится из неё (см. database_url_sync). База одна.
