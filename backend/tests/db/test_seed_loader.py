@@ -103,3 +103,40 @@ async def test_apply_timeouts_sets_session_guc(db_conn) -> None:
     # '60s' → '1min'; '15s' в минуты не делится → остаётся '15s'.
     assert st == "1min"
     assert idl == "15s"
+
+
+async def test_execute_nested_categories_resolve_parent(db_conn) -> None:
+    # 2-уровневое дерево: parent_id ребёнка должен указывать на родителя.
+    # Порядок executemany (родитель раньше) держит FK-валидность без DEFERRABLE.
+    cats = [
+        CategoryNode((1,), "Родитель", None, 0),
+        CategoryNode((1, 1), "Ребёнок", (1,), 0),
+    ]
+    positions = [PositionRow(1, (1, 1), "Поз", None, 0)]
+    listings = [
+        ListingRow(1, "residential", "Бизнес", "not_applicable",
+                   None, False, None, None, 0),
+    ]
+    report = RunReport(files=[], vendors_unique=0, agreements=0,
+                       star_occurrences=0, categories=2, category_warnings=[])
+    plan = LoadPlan(cats, positions, listings, {}, {"residential": None}, report)
+
+    await execute(db_conn, plan, author="seed@test", freeze=False, force=False)
+
+    parent_name = (await db_conn.execute(text(
+        "SELECT p.name FROM category child "
+        "JOIN category p ON p.id = child.parent_id "
+        "WHERE child.name = 'Ребёнок'"))).scalar_one()
+    assert parent_name == "Родитель"
+
+
+async def test_execute_leaves_sequences_ahead(db_conn) -> None:
+    # После вставки с ЯВНЫМИ id sequence должен быть «впереди»: вставка без явного
+    # id (через фабрику) не должна словить PK-коллизию. Доказывает, что setval
+    # добавлять НЕ нужно (id взяты из того же sequence через nextval).
+    await execute(db_conn, _mini_plan(), author="seed@test", freeze=False, force=False)
+
+    v = await f.make_vendor(db_conn, name="Новый Вендор")
+    cat = await f.make_category(db_conn, name="Новый Раздел")
+    pos = await f.make_position(db_conn, category_id=cat, name="Новая Поз")
+    assert v and cat and pos  # id присвоены из sequence, коллизии PK не было
