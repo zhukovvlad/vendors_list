@@ -53,12 +53,13 @@ migrate-current:
 makemigration name:
     cd {{backend}}; uv run alembic revision -m "{{name}}"
 
-# Запуск FastAPI (hot-reload). Порт — VENDORS_BACKEND_PORT (default 8000); на общей
-# машине задай свой свободный порт (тот же, что читает vite.config для прокси /api).
+# Запуск FastAPI (hot-reload). Порт 8137 (тот же, что target прокси в vite.config.ts),
+# НЕ 8000: на общей машине :8000 часто занят чужим процессом, а uvicorn на Windows
+# из-за SO_REUSEADDR молча стартует на занятом порту (трафик уходит чужому владельцу).
 dev-back:
-    cd {{backend}}; $env:LOG_LEVEL = if ($env:LOG_LEVEL) { $env:LOG_LEVEL } else { 'INFO' }; $port = if ($env:VENDORS_BACKEND_PORT) { $env:VENDORS_BACKEND_PORT } else { '8000' }; uv run uvicorn app.main:app --reload --port $port
+    cd {{backend}}; $env:LOG_LEVEL = if ($env:LOG_LEVEL) { $env:LOG_LEVEL } else { 'INFO' }; uv run uvicorn app.main:app --reload --port 8137
 
-# Запуск Vite dev-сервера (:5173, проксирует /api -> 127.0.0.1:$VENDORS_BACKEND_PORT).
+# Запуск Vite dev-сервера (:5173, проксирует /api -> 127.0.0.1:8137).
 dev-front:
     cd {{frontend}}; npm run dev
 
