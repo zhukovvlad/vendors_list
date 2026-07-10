@@ -2,7 +2,7 @@
  * Хуки данных на TanStack Query поверх типизированного клиента.
  * Примеры покрывают главный сценарий (просмотр): матрица перечня и сводка проекта.
  */
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 
 import { api } from "./client"
 
@@ -66,6 +66,11 @@ export function useMatrix(params: {
 }) {
   return useQuery({
     queryKey: ["matrix", params],
+    // При смене фильтров (новый queryKey) держим предыдущие данные вместо
+    // undefined: не мигаем пустой таблицей на латентности сети и не отдаём
+    // useReactTable нестабильный `?? []` (новый [] на каждый рендер — ловушка
+    // бесконечного ре-рендера из FAQ TanStack Table).
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const { data, error } = await api.GET("/listings/matrix", {
         params: { query: params },

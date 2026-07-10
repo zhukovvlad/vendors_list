@@ -19,9 +19,14 @@ import {
 import { Button } from "@/components/ui/button"
 
 import { buildColumnDefs } from "./columns"
-import { withSectionHeaders } from "./model"
+import { withSectionHeaders, type MatrixRow } from "./model"
 
 const PAGE_SIZE = 50 // единый источник: limit запроса и шаг пагинатора (не хардкодить дважды)
+
+// Стабильный фолбэк для useReactTable: инлайновый `?? []` создаёт НОВЫЙ массив на
+// каждый рендер — нестабильная ссылка data это документированная ловушка
+// бесконечного ре-рендера TanStack Table (окно, пока данные не пришли).
+const EMPTY_ITEMS: MatrixRow[] = []
 
 export function MatrixScreen() {
   const search = matrixRoute.useSearch()
@@ -66,7 +71,7 @@ export function MatrixScreen() {
     [matrix.data?.columns]
   )
   const table = useReactTable({
-    data: matrix.data?.items ?? [],
+    data: matrix.data?.items ?? EMPTY_ITEMS,
     columns,
     getCoreRowModel: getCoreRowModel(),
   })
@@ -81,7 +86,7 @@ export function MatrixScreen() {
     )
   }
 
-  const displayRows = withSectionHeaders(matrix.data?.items ?? [])
+  const displayRows = withSectionHeaders(matrix.data?.items ?? EMPTY_ITEMS)
   // Сопоставление position_id → строка таблицы один раз (иначе .find() на каждую
   // отображаемую строку — O(n²) по строкам страницы).
   const rowByPos = new Map(
