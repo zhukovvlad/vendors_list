@@ -64,10 +64,17 @@
 1. **Pre-flight:** `just seed-verify` (dry-run + калибровка §19, без БД) —
    убедиться, что парсер сходится со счётчиками. Подтвердить: в `temp/` ровно
    3 файла по маскам `*жилые*`/`*офисные*`/`*социальные*` (проверено 2026-07-10).
-2. **Grounding (before):** зафиксировать до-состояние —
+2. **Grounding (before):** зафиксировать до-состояние **живым запросом**
+   (не по памяти — иначе after-сравнение недоказуемо):
    `release=0`, `release_listing=0`, `live listing=13 244`,
    `dashboard_summary`: positions_active=0, releases_published=0, drafts_open=0,
    vendors_total=898, vendors_with_agreement=117.
+   Дополнительно снять **отпечаток last-write** — `MAX(updated_at)` и
+   `array_agg(DISTINCT updated_by)` по `listing` и `vendor`. Если максимум = времени
+   вчерашнего сида, а `updated_by` = `{seed}`, значит ручных правок после сида не
+   было и деструктивный reset ничего не сотрёт молча. Guard `_guard_no_projects`
+   проверяет только `compliance.project*` — он НЕ ловит ручные правки live-слоя,
+   поэтому отпечаток закрывает этот зазор.
 3. **Execute:** `just seed --yes --freeze` против боевого Neon.
    **Только по явному go-ahead заказчика** (reset+reseed live-слоя, необратимо
    на месте). Бэкап-ветку Neon НЕ делаем (dev, данные воспроизводимы — решение
@@ -76,22 +83,34 @@
    - `release`: ровно 3 строки, все `status='published'`,
      `effective_date=2026-03-25`, `frozen_at IS NOT NULL`, по одному на каждый
      building_type.
-   - `release_listing`: непусто по каждому `release_id`; суммарно сопоставимо
-     с числом live listing.
+   - `release_listing`: непусто по каждому `release_id`. **Строгий инвариант**
+     (не «сопоставимо»): `freeze_release` копирует все живые строки типа без
+     фильтра по статусу (`WHERE seg.building_type_id = v_bt AND l.deleted_at IS NULL`,
+     INNER JOIN по `position`/`segment` — оба `NOT NULL`), каждая живая строка
+     принадлежит ровно одному building_type. Значит должно выполняться
+     **точное равенство**:
+     `SUM(release_listing по 3 изданиям) == COUNT(listing WHERE deleted_at IS NULL)`
+     ( = 13 244, раз soft-delete-ов нет). Расхождение сумм = реальная ошибка
+     (осиротевший building_type сегмента или неучтённый soft-delete) → стоп.
    - `dashboard_summary`: `positions_active > 0`, `releases_published=3`,
      `drafts_open=0`, `vendors_total`/`vendors_with_agreement` без изменений
      (~898 / ~117).
    - Опционально: `GET /dashboard` и `GET /releases` возвращают то же
      (сквозная проверка API).
 5. **Документирование:** девлог `docs/devlog/2026-07-10-genesis-release.md`
-   (замер, before/after, находка про существующий `--freeze`); обновить
-   CLAUDE.md §5 (издания зафиксированы, БД на 0004); обновить память
+   (замер, before/after, находка про существующий `--freeze`; **явно
+   зафиксировать факт: `vendor.id` (и прочие serial) не стабильны между
+   прогонами сида — reset через `DELETE`, не `TRUNCATE RESTART IDENTITY`, id
+   после reseed поедут вверх; сейчас безопасно, т.к. на них никто не ссылается
+   (0 проектов, 0 прежних изданий), но узнать о захардкоженном id лучше сейчас**);
+   обновить CLAUDE.md §5 (издания зафиксированы, БД на 0004); обновить память
    ([[genesis-release-next]] → исполнено); закрыть KICKOFF.
 
 ## Риски и митигации
 
-- **Destructive reset** — безопасно: 0 проектов в `compliance` (guard) и правок
-  после сида не было → повторный прогон воспроизводит идентичный live-слой.
+- **Destructive reset** — безопасно: 0 проектов в `compliance` (guard) + отпечаток
+  last-write на шаге Grounding доказывает, что ручных правок после сида не было
+  (а не предполагает это) → повторный прогон воспроизводит идентичный live-слой.
 - **Идемпотентность** — `_reset` перед вставкой гарантирует ровно 3 издания
   при любом числе прогонов (форк 6).
 - **Артефакты кавычек в снимке** — приняты (форк 1); правятся в источнике /
