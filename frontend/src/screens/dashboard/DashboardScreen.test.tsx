@@ -30,7 +30,7 @@ describe("DashboardScreen", () => {
     await waitFor(() =>
       expect(screen.getByText(/Жилой дом/)).toBeInTheDocument()
     )
-    expect(screen.getByText(/Соцобъект/)).toBeInTheDocument()
+    expect(screen.getAllByText(/Соцобъект/)).toHaveLength(2)
     expect(screen.getByText(/6 пар вендоров/)).toBeInTheDocument()
   })
 

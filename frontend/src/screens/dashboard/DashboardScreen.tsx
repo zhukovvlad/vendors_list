@@ -57,9 +57,6 @@ export function DashboardScreen() {
 
   const { summary, drafts } = data
   const staleDrafts = drafts.filter((d) => d.is_stale)
-  // Залежавшийся черновик уже не "в работе" — он один раз показан в
-  // «Требует внимания» и не дублируется в общем списке.
-  const activeDrafts = drafts.filter((d) => !d.is_stale)
   const attention = hasAttention(data)
 
   return (
@@ -101,12 +98,12 @@ export function DashboardScreen() {
             <div className="mb-1 text-caption text-muted-foreground uppercase">
               Черновики в работе
             </div>
-            {activeDrafts.length === 0 ? (
+            {drafts.length === 0 ? (
               <div className="py-4 text-small text-muted-foreground">
                 Открытых черновиков нет.
               </div>
             ) : (
-              activeDrafts.map((d) => (
+              drafts.map((d) => (
                 <div
                   key={d.release_id}
                   className="flex items-center gap-3 border-t border-border py-3"
