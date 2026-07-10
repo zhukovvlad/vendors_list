@@ -17,7 +17,7 @@ from .config import get_settings
 from .db import dispose_engine
 from .logging_config import setup_logging
 from .middleware import RequestIdMiddleware
-from .routers import compliance, listings, meta, releases
+from .routers import compliance, dashboard, listings, meta, releases
 
 
 @asynccontextmanager
@@ -52,7 +52,7 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    for module in (meta, listings, releases, compliance):
+    for module in (meta, listings, releases, compliance, dashboard):
         app.include_router(module.router)
 
     return app
