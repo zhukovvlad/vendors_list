@@ -8,6 +8,7 @@ import {
 import { z } from "zod"
 
 import { api } from "@/api/client"
+import { DashboardScreen } from "@/screens/dashboard/DashboardScreen"
 import { DesignSystemShowcase } from "@/screens/DesignSystemShowcase"
 import { MatrixScreen } from "@/screens/matrix/MatrixScreen"
 
@@ -22,7 +23,7 @@ const matrixSearchSchema = z.object({
 
 export const matrixRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/",
+  path: "/matrix",
   validateSearch: matrixSearchSchema,
   loaderDeps: ({ search }) => ({ building_type_id: search.building_type_id }),
   loader: async ({ deps }) => {
@@ -35,13 +36,19 @@ export const matrixRoute = createRoute({
       const first = data?.[0]
       if (first) {
         throw redirect({
-          to: "/",
+          to: "/matrix",
           search: (prev) => ({ ...prev, building_type_id: first.id }),
         })
       }
     }
   },
   component: MatrixScreen,
+})
+
+const dashboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/",
+  component: DashboardScreen,
 })
 
 const designSystemRoute = createRoute({
@@ -53,7 +60,11 @@ const designSystemRoute = createRoute({
 // Экспортируем routeTree: интеграционный тест (Task 9) строит memory-router из
 // ЭТОГО ЖЕ дерева, поэтому matrixRoute.useSearch()/useNavigate() в экране резолвятся
 // строго (те же route-инстансы), без нестрогих вариантов.
-export const routeTree = rootRoute.addChildren([matrixRoute, designSystemRoute])
+export const routeTree = rootRoute.addChildren([
+  dashboardRoute,
+  matrixRoute,
+  designSystemRoute,
+])
 
 export const router = createRouter({ routeTree })
 
