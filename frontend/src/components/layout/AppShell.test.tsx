@@ -19,6 +19,11 @@ vi.mock("@/lib/env", () => ({ isDevBuild: vi.fn(() => true) }))
 
 afterEach(() => {
   vi.mocked(isDevBuild).mockReturnValue(true)
+  // Тест переключателя темы (см. ниже) мутирует и classList documentElement,
+  // и localStorage["theme"] (theme-provider.tsx) — сбрасываем оба, чтобы
+  // следующие тесты в файле не унаследовали тёмную тему.
+  document.documentElement.classList.remove("dark", "light")
+  localStorage.clear()
 })
 
 // Роутер резолвит матчинг асинхронно даже без loader'ов (см. router.test.tsx —
