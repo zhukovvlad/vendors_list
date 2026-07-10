@@ -36,14 +36,20 @@ describe("hasAttention", () => {
   })
 
   it("true, если есть кандидаты", () => {
-    expect(hasAttention({ ...base, summary: { ...base.summary, merge_candidate_pairs: 6 } })).toBe(
-      true
-    )
+    expect(
+      hasAttention({
+        ...base,
+        summary: { ...base.summary, merge_candidate_pairs: 6 },
+      })
+    ).toBe(true)
   })
 
   it("null кандидатов трактуется как «нет пункта»", () => {
     expect(
-      hasAttention({ ...base, summary: { ...base.summary, merge_candidate_pairs: null } })
+      hasAttention({
+        ...base,
+        summary: { ...base.summary, merge_candidate_pairs: null },
+      })
     ).toBe(false)
   })
 

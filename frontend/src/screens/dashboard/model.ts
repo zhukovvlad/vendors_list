@@ -14,7 +14,9 @@ function plural(n: number, forms: [string, string, string]): string {
 
 /** Относительное время правки: «сегодня» / «вчера» / «N дней|недель назад». */
 export function formatRelative(iso: string, now: Date): string {
-  const days = Math.floor((now.getTime() - new Date(iso).getTime()) / 86_400_000)
+  const days = Math.floor(
+    (now.getTime() - new Date(iso).getTime()) / 86_400_000
+  )
   if (days <= 0) return "сегодня"
   if (days === 1) return "вчера"
   if (days < 7) return `${days} ${plural(days, ["день", "дня", "дней"])} назад`
