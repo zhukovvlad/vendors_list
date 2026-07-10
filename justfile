@@ -53,11 +53,12 @@ migrate-current:
 makemigration name:
     cd {{backend}}; uv run alembic revision -m "{{name}}"
 
-# Запуск FastAPI (hot-reload) в виртуальном окружении. API на :8000, /docs.
+# Запуск FastAPI (hot-reload). Порт — VENDORS_BACKEND_PORT (default 8000); на общей
+# машине задай свой свободный порт (тот же, что читает vite.config для прокси /api).
 dev-back:
-    cd {{backend}}; $env:LOG_LEVEL = if ($env:LOG_LEVEL) { $env:LOG_LEVEL } else { 'INFO' }; uv run uvicorn app.main:app --reload --port 8000
+    cd {{backend}}; $env:LOG_LEVEL = if ($env:LOG_LEVEL) { $env:LOG_LEVEL } else { 'INFO' }; $port = if ($env:VENDORS_BACKEND_PORT) { $env:VENDORS_BACKEND_PORT } else { '8000' }; uv run uvicorn app.main:app --reload --port $port
 
-# Запуск Vite dev-сервера (:5173, проксирует /api -> :8000).
+# Запуск Vite dev-сервера (:5173, проксирует /api -> 127.0.0.1:$VENDORS_BACKEND_PORT).
 dev-front:
     cd {{frontend}}; npm run dev
 
