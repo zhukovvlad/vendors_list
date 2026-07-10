@@ -29,6 +29,15 @@ if (typeof window !== "undefined") {
   if (!Element.prototype.scrollIntoView) {
     Element.prototype.scrollIntoView = () => {}
   }
+  // Radix DropdownMenuContent (позиционирование через Popper) использует
+  // ResizeObserver — в jsdom его нет вовсе.
+  if (!window.ResizeObserver) {
+    window.ResizeObserver = class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof window.ResizeObserver
+  }
 }
 
 // listen() зовём синхронно на верхнем уровне setupFiles (а не внутри beforeAll):

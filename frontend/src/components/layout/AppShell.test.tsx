@@ -1,11 +1,12 @@
 import { cleanup, render, screen, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import {
   RouterProvider,
   createRouter,
   createMemoryHistory,
 } from "@tanstack/react-router"
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { ThemeProvider } from "@/components/theme-provider"
 import { isDevBuild } from "@/lib/env"
@@ -13,28 +14,8 @@ import { routeTree } from "@/router"
 
 vi.mock("@/lib/env", () => ({ isDevBuild: vi.fn(() => true) }))
 
-beforeAll(() => {
-  // shadcn Sidebar использует matchMedia (useIsMobile); в jsdom его нет.
-  if (!window.matchMedia) {
-    window.matchMedia = ((query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      addListener: () => {},
-      removeListener: () => {},
-      dispatchEvent: () => false,
-    })) as unknown as typeof window.matchMedia
-  }
-  // Radix (DropdownMenu) в jsdom требует этих API — иначе меню не открывается.
-  if (!Element.prototype.hasPointerCapture) {
-    Element.prototype.hasPointerCapture = () => false
-  }
-  if (!Element.prototype.scrollIntoView) {
-    Element.prototype.scrollIntoView = () => {}
-  }
-})
+// Полифиллы matchMedia/hasPointerCapture/scrollIntoView для shadcn Sidebar и
+// Radix DropdownMenu в jsdom централизованы глобально в src/test/setup.ts.
 
 afterEach(() => {
   vi.mocked(isDevBuild).mockReturnValue(true)
@@ -127,5 +108,30 @@ describe("AppShell — шапка", () => {
     expect(
       screen.getByRole("button", { name: /Свернуть меню/i })
     ).toBeInTheDocument()
+  })
+})
+
+describe("AppShell — футер", () => {
+  it("переключатель темы меняет класс на documentElement", async () => {
+    const user = userEvent.setup()
+    await renderAt("/design-system")
+    await user.click(screen.getByRole("button", { name: /тема/i }))
+    await user.click(await screen.findByText("Тёмная"))
+    expect(document.documentElement.classList.contains("dark")).toBe(true)
+  })
+
+  it("блок пользователя — плейсхолдер (имя и роль)", async () => {
+    await renderAt("/design-system")
+    expect(screen.getByText("Владимир Ж.")).toBeInTheDocument()
+    expect(screen.getByText("Редактор")).toBeInTheDocument()
+  })
+
+  it("при сворачивании сайдбара футер (тема и юзер) не ломается", async () => {
+    const user = userEvent.setup()
+    await renderAt("/design-system")
+    await user.click(screen.getByRole("button", { name: /Свернуть меню/i }))
+    // Триггеры темы и юзера остаются в DOM (доступны иконкой, не размонтированы).
+    expect(screen.getByRole("button", { name: /тема/i })).toBeInTheDocument()
+    expect(screen.getByText("Владимир Ж.")).toBeInTheDocument()
   })
 })

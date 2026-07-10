@@ -28,6 +28,9 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar"
 
+import { ThemeControl } from "./ThemeControl"
+import { UserMenu } from "./UserMenu"
+
 const NAV = [
   { title: "Обзор", to: "/", icon: LayoutDashboard, exact: true },
   { title: "Каталог стандартов", to: "/matrix", icon: Table2, exact: false },
@@ -101,6 +104,8 @@ export function AppSidebar() {
             </SidebarMenuItem>
           )}
         </SidebarMenu>
+        <ThemeControl />
+        <UserMenu />
       </SidebarFooter>
     </Sidebar>
   )
