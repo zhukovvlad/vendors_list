@@ -43,6 +43,9 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173"
 
+    # Порог «залежавшегося» черновика (дни) для дашборда. Правится env, не миграцией.
+    dashboard_stale_days: int = 14
+
     # --- OIDC ---
     oidc_issuer: str = ""
     oidc_audience: str = ""
