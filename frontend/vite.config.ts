@@ -17,6 +17,14 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     css: false,
+    // api/client.ts иначе берёт относительный baseUrl "/api": openapi-fetch строит
+    // запрос через `new Request(url, init)`, а в jsdom/Node (в отличие от браузера)
+    // глобальный Request не резолвит относительный URL против "текущего документа" —
+    // падает `TypeError: Failed to parse URL from /api/...`. Абсолютный URL на
+    // дефолтном origin jsdom (http://localhost:3000) чинит и Request(), и матчинг
+    // MSW-обработчиков (объявлены относительным путём "/api/...", MSW сверяет
+    // по итоговому abs-URL на том же origin).
+    env: { VITE_API_URL: "http://localhost:3000/api" },
   },
   server: {
     // Прокси на бэкенд: фронт зовёт относительный /api/*, дев-сервер снимает

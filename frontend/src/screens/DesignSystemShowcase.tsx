@@ -11,7 +11,7 @@ function Swatch({ label, className }: { label: string; className: string }) {
   )
 }
 
-export function App() {
+export function DesignSystemShowcase() {
   return (
     <div className="min-h-svh bg-background p-8 text-foreground">
       <div className="mx-auto flex max-w-3xl flex-col gap-8">
@@ -58,5 +58,3 @@ export function App() {
     </div>
   )
 }
-
-export default App
