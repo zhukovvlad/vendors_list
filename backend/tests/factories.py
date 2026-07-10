@@ -182,3 +182,51 @@ async def make_selection(
             },
         )
     ).scalar_one()
+
+
+async def make_building_type(
+    conn: AsyncConnection, code: str, name: str = "Тест-тип", sort_order: int = 99
+) -> int:
+    """Свежий тип объекта (для изоляции агрегатных вьюх — у него нет чужих релизов)."""
+    return (
+        await conn.execute(
+            text(
+                "INSERT INTO building_type (code, name, sort_order) "
+                "VALUES (:c, :n, :s) RETURNING id"
+            ),
+            {"c": code, "n": name, "s": sort_order},
+        )
+    ).scalar_one()
+
+
+async def make_segment(
+    conn: AsyncConnection,
+    building_type_id: int,
+    name: str = "Тест-класс",
+    group_id: int | None = None,
+    sort_order: int = 0,
+) -> int:
+    return (
+        await conn.execute(
+            text(
+                "INSERT INTO segment (building_type_id, group_id, name, sort_order) "
+                "VALUES (:bt, :g, :n, :o) RETURNING id"
+            ),
+            {"bt": building_type_id, "g": group_id, "n": name, "o": sort_order},
+        )
+    ).scalar_one()
+
+
+async def make_release_listing(
+    conn: AsyncConnection, release_id: int, position_id: int, status: str = "allowed"
+) -> int:
+    """Минимальная строка снимка издания (release_listing без триггеров)."""
+    return (
+        await conn.execute(
+            text(
+                "INSERT INTO release_listing (release_id, position_id, status) "
+                "VALUES (:r, :p, :st) RETURNING id"
+            ),
+            {"r": release_id, "p": position_id, "st": status},
+        )
+    ).scalar_one()
