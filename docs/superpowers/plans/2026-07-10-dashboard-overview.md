@@ -307,7 +307,16 @@ Run: `cd backend; uv run pytest tests/db/test_dashboard_views.py -q`
 Expected: FAIL/ERROR — `relation "dashboard_summary" does not exist`.
 (Если нет `DATABASE_URL_TEST` — тесты скипнутся; тогда прогнать после настройки тест-ветки.)
 
-- [ ] **Step 4: Написать миграцию с обеими вьюхами**
+- [ ] **Step 4: Подтвердить головную ревизию и имена колонок, затем написать миграцию**
+
+Сначала убедиться, что цепочка ревизий не разъедется:
+
+Run: `cd backend; uv run alembic heads`
+Expected: единственный head `0003_category_sort_path` — тогда `down_revision = "0003_category_sort_path"` верен. Если head другой/несколько — привести `down_revision` к фактическому head.
+
+Имена колонок `release` для вьюхи `dashboard_open_drafts` подтверждены по
+[0001:312-315](../../../backend/migrations/sql/0001_core_schema.sql#L312-L315):
+`label` (NOT NULL), `effective_date` (nullable), `author` (nullable) — существуют.
 
 Create `backend/migrations/versions/0004_dashboard_views.py`:
 
@@ -532,12 +541,18 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 logger = logging.getLogger(__name__)
 
+# Убираем только ОБЩИЙ хвост «(Native)» — не любые скобки. Скобки с брендом-
+# владельцем («ИСТРАТЕХ (Grundfos)») разрешаются через represents_id в данных, а не
+# нормализацией имени; срезать все скобки нельзя — «Насос (300Вт)» и «(500Вт)»
+# схлопнулись бы в ложный дубль. Детект консервативный: пропуск лучше шума.
 _TAIL = re.compile(r"\((?:native|нативный)\)", re.IGNORECASE)
 _NONALNUM = re.compile(r"[^0-9a-zа-яё]+", re.IGNORECASE)
 
 
 def normalize_vendor_name(name: str) -> str:
-    """lower + убрать хвост «(Native)» + схлопнуть пунктуацию/пробелы."""
+    """lower + убрать общий хвост «(Native)» + схлопнуть пунктуацию/пробелы.
+
+    НЕ трогает скобки с брендом-владельцем — это забота represents_id, не регэкспа."""
     s = _TAIL.sub(" ", name).lower()
     s = _NONALNUM.sub(" ", s)
     return " ".join(s.split())
@@ -548,8 +563,18 @@ async def count_merge_candidates(
 ) -> int | None:
     """Число кандидат-пар (коллизия нормы между разными бренд-ключами).
 
-    Устойчив к таймауту: локальный statement_timeout + перехват DBAPIError → None
-    (медленный детект не должен ронять весь дашборд)."""
+    Устойчив к таймауту: SET LOCAL statement_timeout + перехват DBAPIError → None
+    (медленный детект не должен ронять весь дашборд).
+
+    SET LOCAL действует ТОЛЬКО внутри транзакции. read_conn в SQLAlchemy 2.0 (без
+    AUTOCOMMIT) транзакционен, и к вызову коннект уже в неявной транзакции запроса
+    (сводка/черновики прочитаны раньше) — таймаут применяется к SELECT ниже и
+    сбрасывается при закрытии соединения (без утечки в пул). Если транзакции всё же
+    нет (изменится порядок вызовов) — открываем и откатываем свою (детект read-only),
+    чтобы гарантия таймаута не зависела от того, «кто открыл транзакцию раньше»."""
+    own_txn = not conn.in_transaction()
+    if own_txn:
+        await conn.begin()
     try:
         await conn.execute(
             text("SELECT set_config('statement_timeout', :ms, true)"),
@@ -563,6 +588,9 @@ async def count_merge_candidates(
     except DBAPIError:
         logger.warning("merge-candidate detect failed/timed out", exc_info=True)
         return None
+    finally:
+        if own_txn and conn.in_transaction():
+            await conn.rollback()  # закрыть СВОЮ транзакцию → сбросить statement_timeout
 
     by_norm: dict[str, set[int]] = defaultdict(set)
     for r in rows:
@@ -587,7 +615,10 @@ Create `backend/tests/db/test_dashboard_service.py`:
 
 ```python
 import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError, OperationalError
 
+from app.services import dashboard as svc
 from app.services.dashboard import count_merge_candidates
 from tests import factories as f
 
@@ -606,6 +637,32 @@ async def test_linked_vendors_not_candidate(db_conn) -> None:
     owner = await f.make_vendor(db_conn, name="YyBrand")
     await f.make_vendor(db_conn, name="yy brand", represents_id=owner)  # тот же бренд-ключ
     assert await count_merge_candidates(db_conn) == base  # не пара
+
+
+async def test_local_statement_timeout_is_effective(db_conn) -> None:
+    # Доказательство пункта ревью №1: SET LOCAL statement_timeout РЕАЛЬНО действует в
+    # read-транзакции (db_conn уже в транзакции). Иначе защита в count_merge_candidates
+    # была бы фикцией. 50 мс + pg_sleep(1) → отмена запроса.
+    await db_conn.execute(text("SELECT set_config('statement_timeout', '50', true)"))
+    with pytest.raises(DBAPIError):
+        await db_conn.execute(text("SELECT pg_sleep(1)"))
+    # транзакция после отмены — в aborted; фикстура db_conn откатит её в teardown.
+
+
+async def test_returns_none_on_internal_db_error(db_conn, monkeypatch) -> None:
+    # Пункт ревью №2: ВНУТРЕННЯЯ защита (except DBAPIError → None), а не только
+    # роутерный except. SELECT vendor «падает» DBAPIError → функция сама вернёт None.
+    orig = db_conn.execute
+    state = {"n": 0}
+
+    async def flaky(clause, *args, **kwargs):
+        state["n"] += 1
+        if state["n"] >= 2:  # 1-й вызов — set_config; 2-й — SELECT vendor → взрыв
+            raise OperationalError("SELECT vendor", {}, Exception("simulated timeout"))
+        return await orig(clause, *args, **kwargs)
+
+    monkeypatch.setattr(db_conn, "execute", flaky)
+    assert await svc.count_merge_candidates(db_conn) is None
 ```
 
 - [ ] **Step 6: Запустить db-тест — зелёный**
