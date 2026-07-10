@@ -53,11 +53,13 @@ migrate-current:
 makemigration name:
     cd {{backend}}; uv run alembic revision -m "{{name}}"
 
-# Запуск FastAPI (hot-reload) в виртуальном окружении. API на :8000, /docs.
+# Запуск FastAPI (hot-reload). Порт 8137 (тот же, что target прокси в vite.config.ts),
+# НЕ 8000: на общей машине :8000 часто занят чужим процессом, а uvicorn на Windows
+# из-за SO_REUSEADDR молча стартует на занятом порту (трафик уходит чужому владельцу).
 dev-back:
-    cd {{backend}}; $env:LOG_LEVEL = if ($env:LOG_LEVEL) { $env:LOG_LEVEL } else { 'INFO' }; uv run uvicorn app.main:app --reload --port 8000
+    cd {{backend}}; $env:LOG_LEVEL = if ($env:LOG_LEVEL) { $env:LOG_LEVEL } else { 'INFO' }; uv run uvicorn app.main:app --reload --port 8137
 
-# Запуск Vite dev-сервера (:5173, проксирует /api -> :8000).
+# Запуск Vite dev-сервера (:5173, проксирует /api -> 127.0.0.1:8137).
 dev-front:
     cd {{frontend}}; npm run dev
 

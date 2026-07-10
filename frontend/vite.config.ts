@@ -27,11 +27,14 @@ export default defineConfig({
     env: { VITE_API_URL: "http://localhost:3000/api" },
   },
   server: {
-    // Прокси на бэкенд: фронт зовёт относительный /api/*, дев-сервер снимает
-    // префикс и шлёт на FastAPI (localhost:8000) — без CORS в разработке.
+    // Прокси на бэкенд: фронт зовёт относительный /api/*, дев-сервер снимает префикс
+    // и шлёт на FastAPI. Порт 8137 (тот же, что `just dev-back`), НЕ 8000: на общей
+    // машине :8000 часто занят чужим процессом, а uvicorn на Windows из-за
+    // SO_REUSEADDR молча стартует на занятом порту и трафик уходит чужому владельцу.
+    // 127.0.0.1, не localhost — чтобы прокси не ушёл в IPv6 (::1), где бэкенда нет.
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: "http://127.0.0.1:8137",
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api/, ""),
       },
