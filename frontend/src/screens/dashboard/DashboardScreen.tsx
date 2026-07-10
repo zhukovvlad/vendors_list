@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 
-import { formatRelative, hasAttention } from "./model"
+import { formatRelative, hasAttention, plural } from "./model"
 
 function Metric({
   label,
@@ -82,7 +82,10 @@ export function DashboardScreen() {
           label="Издания"
           value={summary.releases_published + summary.drafts_open}
         >
-          {summary.releases_published} релизов · {summary.drafts_open} черновика
+          {summary.releases_published}{" "}
+          {plural(summary.releases_published, ["релиз", "релиза", "релизов"])} ·{" "}
+          {summary.drafts_open}{" "}
+          {plural(summary.drafts_open, ["черновик", "черновика", "черновиков"])}
         </Metric>
         <Metric label="Вендоры" value={summary.vendors_total}>
           <span className="flex items-center gap-1">
@@ -141,7 +144,18 @@ export function DashboardScreen() {
                     <div className="flex items-center gap-3 border-t border-border py-3">
                       <ArrowsUpFromLine className="size-4 shrink-0 text-primary" />
                       <div className="min-w-0 flex-1 text-small">
-                        {summary.merge_candidate_pairs} пар вендоров похожи
+                        {summary.merge_candidate_pairs}{" "}
+                        {plural(summary.merge_candidate_pairs, [
+                          "пара",
+                          "пары",
+                          "пар",
+                        ])}{" "}
+                        вендоров{" "}
+                        {plural(summary.merge_candidate_pairs, [
+                          "похожа",
+                          "похожи",
+                          "похожи",
+                        ])}
                         <div className="text-caption text-muted-foreground">
                           возможные дубли
                         </div>

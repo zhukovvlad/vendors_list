@@ -4,7 +4,8 @@ export type Dashboard = components["schemas"]["Dashboard"]
 export type DashboardDraft = components["schemas"]["DashboardDraft"]
 export type DashboardSummary = components["schemas"]["DashboardSummary"]
 
-function plural(n: number, forms: [string, string, string]): string {
+/** Русская форма множественного числа: [один, 2-4, 5+]. */
+export function plural(n: number, forms: [string, string, string]): string {
   const m10 = n % 10
   const m100 = n % 100
   if (m10 === 1 && m100 !== 11) return forms[0]
