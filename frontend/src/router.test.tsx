@@ -34,4 +34,11 @@ describe("routing", () => {
       expect(screen.getByText("Тип объекта")).toBeInTheDocument()
     )
   })
+
+  it("/vendors рендерит заглушку раздела «в разработке»", async () => {
+    renderAt("/vendors")
+    await waitFor(() =>
+      expect(screen.getByText("Раздел в разработке.")).toBeInTheDocument()
+    )
+  })
 })
