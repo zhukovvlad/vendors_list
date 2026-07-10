@@ -2,7 +2,7 @@
 
 **Дата:** 2026-07-10
 **Статус:** утверждён к реализации
-**Бриф-исток:** [genesis-release-KICKOFF.md](../genesis-release-KICKOFF.md)
+**Бриф-исток:** `genesis-release-KICKOFF.md` (transient working-note, удалён после исполнения)
 
 ## Цель
 
