@@ -90,13 +90,24 @@ const Toaster = ({ ...props }: ToasterProps) => {
 export { Toaster }
 ```
 
-- [ ] **Step 3: eslint-disable в `sidebar.tsx`**
+- [ ] **Step 3: Патчи `sidebar.tsx` (eslint-disable + RU-лейбл триггера)**
 
-Первой строкой файла `frontend/src/components/ui/sidebar.tsx` добавить:
+3a. Первой строкой файла `frontend/src/components/ui/sidebar.tsx` добавить:
 ```tsx
 /* eslint-disable react-refresh/only-export-components */
 ```
 (файл экспортирует хук `useSidebar` и cva-варианты рядом с компонентами — иначе `npm run lint` упадёт).
+
+3b. Локализовать `sr-only`-лейбл `SidebarTrigger` (RU-only интерфейс — единственное
+английское слово в проде недопустимо). Внутри компонента `SidebarTrigger` найти:
+```tsx
+      <span className="sr-only">Toggle Sidebar</span>
+```
+и заменить на:
+```tsx
+      <span className="sr-only">Свернуть меню</span>
+```
+(тесты оболочки в Task 4/5 запрашивают триггер по имени `/Свернуть меню/i`.)
 
 - [ ] **Step 4: Форматирование**
 
@@ -435,7 +446,7 @@ describe("AppShell — шапка", () => {
     const crumb = screen.getByRole("navigation", { name: "breadcrumb" })
     expect(within(crumb).getByText("Вендоры")).toBeInTheDocument()
     expect(
-      screen.getByRole("button", { name: /Toggle Sidebar/i })
+      screen.getByRole("button", { name: /Свернуть меню/i })
     ).toBeInTheDocument()
   })
 })
@@ -706,7 +717,7 @@ describe("AppShell — футер", () => {
   it("при сворачивании сайдбара футер (тема и юзер) не ломается", async () => {
     const user = userEvent.setup()
     renderAt("/design-system")
-    await user.click(screen.getByRole("button", { name: /Toggle Sidebar/i }))
+    await user.click(screen.getByRole("button", { name: /Свернуть меню/i }))
     // Триггеры темы и юзера остаются в DOM (доступны иконкой, не размонтированы).
     expect(screen.getByRole("button", { name: /тема/i })).toBeInTheDocument()
     expect(screen.getByText("Владимир Ж.")).toBeInTheDocument()
