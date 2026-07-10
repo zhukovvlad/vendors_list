@@ -107,8 +107,8 @@ describe("AppShell — шапка", () => {
   it("крошка показывает метку активного раздела и есть триггер сайдбара", async () => {
     await renderAt("/vendors")
     // «Вендоры» встречается в навигации/заголовке экрана — скоупим на саму крошку
-    // (shadcn Breadcrumb рендерит <nav aria-label="breadcrumb">).
-    const crumb = screen.getByRole("navigation", { name: "breadcrumb" })
+    // (shadcn Breadcrumb рендерит <nav aria-label="Хлебные крошки">).
+    const crumb = screen.getByRole("navigation", { name: "Хлебные крошки" })
     expect(within(crumb).getByText("Вендоры")).toBeInTheDocument()
     expect(
       screen.getByRole("button", { name: /Свернуть меню/i })

@@ -6,6 +6,11 @@ function getIsMobile() {
   return window.innerWidth < MOBILE_BREAKPOINT
 }
 
+/**
+ * Возвращает `true`, если ширина окна меньше мобильного брейкпоинта (768px).
+ * Инициализируется синхронно из текущей ширины и подписывается на изменения
+ * media query, обновляя состояние при пересечении порога.
+ */
 export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean>(() => getIsMobile())
 
