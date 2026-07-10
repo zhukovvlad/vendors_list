@@ -24,6 +24,35 @@ export const residentialSegments = [
   },
 ]
 
+export const dashboardFixture = {
+  summary: {
+    positions_active: 412,
+    releases_published: 18,
+    drafts_open: 3,
+    vendors_total: 248,
+    vendors_with_agreement: 142,
+    merge_candidate_pairs: 6,
+  },
+  drafts: [
+    {
+      release_id: 1,
+      building_type_name: "Жилой дом",
+      label: "Бизнес v4",
+      last_touched_at: "2026-07-09T10:00:00Z",
+      last_touched_by: "ivanov",
+      is_stale: false,
+    },
+    {
+      release_id: 3,
+      building_type_name: "Соцобъект",
+      label: "Базовый v2",
+      last_touched_at: "2026-06-25T10:00:00Z",
+      last_touched_by: "petrov",
+      is_stale: true,
+    },
+  ],
+}
+
 export const handlers = [
   http.get(`${BASE}/meta/building-types`, () =>
     HttpResponse.json(buildingTypes)
@@ -31,6 +60,7 @@ export const handlers = [
   http.get(`${BASE}/meta/segments`, () =>
     HttpResponse.json(residentialSegments)
   ),
+  http.get(`${BASE}/dashboard`, () => HttpResponse.json(dashboardFixture)),
   http.get(`${BASE}/listings/matrix`, () =>
     HttpResponse.json({
       columns: [

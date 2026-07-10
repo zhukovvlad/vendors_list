@@ -108,3 +108,15 @@ export function useSegments(buildingTypeId?: number) {
     },
   })
 }
+
+export function useDashboard() {
+  return useQuery({
+    queryKey: ["dashboard"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/dashboard")
+      if (error) throw error
+      if (!data) throw new Error("Пустой ответ /dashboard")
+      return data
+    },
+  })
+}
