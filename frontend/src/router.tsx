@@ -2,18 +2,18 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
-  Outlet,
   redirect,
 } from "@tanstack/react-router"
 import { z } from "zod"
 
 import { api } from "@/api/client"
+import { AppShell } from "@/components/layout/AppShell"
 import { DashboardScreen } from "@/screens/dashboard/DashboardScreen"
 import { DesignSystemShowcase } from "@/screens/DesignSystemShowcase"
 import { MatrixScreen } from "@/screens/matrix/MatrixScreen"
 import { VendorsScreen } from "@/screens/vendors/VendorsScreen"
 
-const rootRoute = createRootRoute({ component: () => <Outlet /> })
+const rootRoute = createRootRoute({ component: AppShell })
 
 const matrixSearchSchema = z.object({
   building_type_id: z.number().int().optional(),

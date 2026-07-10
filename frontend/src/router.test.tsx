@@ -7,6 +7,8 @@ import {
 } from "@tanstack/react-router"
 import { describe, expect, it } from "vitest"
 
+import { ThemeProvider } from "@/components/theme-provider"
+
 import { routeTree } from "./router"
 
 function renderAt(path: string) {
@@ -17,7 +19,9 @@ function renderAt(path: string) {
   const qc = new QueryClient()
   render(
     <QueryClientProvider client={qc}>
-      <RouterProvider router={router as never} />
+      <ThemeProvider>
+        <RouterProvider router={router as never} />
+      </ThemeProvider>
     </QueryClientProvider>
   )
 }
@@ -25,7 +29,13 @@ function renderAt(path: string) {
 describe("routing", () => {
   it("/ рендерит дашборд «Обзор»", async () => {
     renderAt("/")
-    await waitFor(() => expect(screen.getByText("Обзор")).toBeInTheDocument())
+    // «Обзор» — и заголовок экрана, и пункт навигации сайдбара (Task 4):
+    // скоупим на h1, чтобы не словить неоднозначность по тексту.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { level: 1, name: "Обзор" })
+      ).toBeInTheDocument()
+    )
   })
 
   it("/matrix рендерит экран матрицы (фильтр «Тип объекта»)", async () => {

@@ -9,6 +9,7 @@ import userEvent from "@testing-library/user-event"
 import { http, HttpResponse } from "msw"
 import { describe, expect, it } from "vitest"
 
+import { ThemeProvider } from "@/components/theme-provider"
 // Переиспользуем БОЕВОЕ дерево маршрутов — те же route-инстансы, что импортирует
 // экран, поэтому строгие matrixRoute.useSearch()/useNavigate() резолвятся в тесте.
 import { routeTree } from "@/router"
@@ -25,7 +26,9 @@ function renderWith(router: ReturnType<typeof makeRouter>) {
   const qc = new QueryClient()
   render(
     <QueryClientProvider client={qc}>
-      <RouterProvider router={router} />
+      <ThemeProvider>
+        <RouterProvider router={router} />
+      </ThemeProvider>
     </QueryClientProvider>
   )
 }
