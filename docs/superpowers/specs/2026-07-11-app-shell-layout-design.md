@@ -1,37 +1,53 @@
-# Дизайн: App Shell (sidebar + navbar)
+# Дизайн: App Shell (сайдбар + тонкая шапка)
 
 **Дата:** 2026-07-11
 **Ветка:** `feat/app-shell-layout`
-**Источник идеи:** перенести layout из соседнего проекта
-[`zhukovvlad/tenders-react`](https://github.com/zhukovvlad/tenders-react)
-(`src/components/layout/{Layout,AppSidebar,Navbar}.tsx`) в текущий фронт Vendors.
+**Референс:** визуальный макет (dark+light, приложен заказчиком) и согласованный
+дизайн-документ `2026-07-10-layout-shell-design.md` (источник правды по навигации).
+Соседний проект [`zhukovvlad/tenders-react`](https://github.com/zhukovvlad/tenders-react)
+(`src/components/layout/*`) — **только визуальный/технический референс**, не образец
+структуры меню.
 
 ## Цель
 
-Дать приложению постоянную оболочку: сворачиваемый боковой сайдбар с навигацией +
-верхнюю панель (navbar) с переключателем темы и меню пользователя. Визуально и
-структурно — как в tenders-react, но **адаптировано под стек Vendors** (не
-буквальный порт).
+Дать приложению постоянную оболочку: сворачиваемый боковой сайдбар с навигацией и
+пользовательским футером + тонкую шапку контента с хлебной крошкой. Адаптировано под
+стек Vendors (TanStack Router, существующий `ThemeProvider`), не буквальный порт.
 
-## Принятые решения (из брейнсторминга)
+## Принятые решения
 
-1. **Адаптация, не порт 1:1.** tenders собран на `react-router-dom` + собственный
-   `theme-provider` + боевой `useAuth`. Vendors — на **TanStack Router**, с уже
-   существующим (более продвинутым) `ThemeProvider` и без подключённого к фронту
-   auth. Переносим *структуру и вид* оболочки, переиспользуя инфраструктуру Vendors.
-2. **Меню:** реальные роуты + заглушки будущих экранов (ТЗ §4-5).
-3. **Navbar:** переключатель темы (через существующий `useTheme`) + **статичный
-   плейсхолдер** меню пользователя (avatar; Profile/Settings/Logout не активны, пока
-   нет боевого SSO/RBAC — CLAUDE.md §2).
-4. **Заглушки:** видимы, но `disabled` + бейдж «скоро»; не кликаются.
-5. **sonner Toaster:** добавляем сразу в оболочку (готовность под будущие мутации).
+1. **Адаптация, не порт 1:1.** Vendors — на **TanStack Router**, с уже существующим
+   `ThemeProvider` (в `main.tsx`) и без подключённого к фронту auth. Переносим *вид*
+   оболочки, переиспользуя инфраструктуру Vendors.
+2. **Тема и меню пользователя — в футере сайдбара** (не в верхней панели). Сверху —
+   тонкая шапка только с `SidebarTrigger` + хлебной крошкой.
+3. **Навигация** (источник правды — дизайн-документ, не tenders):
+   - Рабочие разделы: **Обзор** (`/`), **Каталог стандартов** (`/matrix`),
+     **Вендоры** (`/vendors`).
+   - Матрица — стартовый экран раздела «Каталог стандартов», **не** отдельный пункт.
+   - Системный пункт **Админка** — под волосяным разделителем.
+   - **Нет** пунктов «Проекты», «Импорт Excel», «Матрица перечня».
+4. **Вендоры — активный раздел фазы 1.** Экран ещё не собран → заводим роут `/vendors`
+   с минимальным экраном-заглушкой «Раздел в разработке» (пункт кликабелен и выглядит
+   как обычный, не серый). Это НЕ статус «скоро» (то была бы фаза 2).
+5. **Админка** — системный пункт, визуально приглушён, `disabled` с честной пометкой
+   «в разработке» (экран админ-правок — фаза 6 ТЗ). Роут пока не заводим.
+6. **Дизайн-система** — dev-витрина. В основной навигации проду не место: пункт
+   рендерится только в dev-сборке (`import.meta.env.DEV`). Роут `/design-system`
+   остаётся (тесты/прямой заход).
+7. **Лого** — «Вендор-листы» (кириллица), marker-квадрат «М». UI только на русском.
+8. **Хлебная крошка** в шапке контента, с заделом под вложенность каталога
+   (`Каталог стандартов → Жилой дом · Бизнес → издание v4` — глубокие уровни появятся
+   с детализацией матрицы; сейчас крошка показывает раздел текущего роута).
+9. **sonner Toaster** — в оболочке сразу.
 
 ## Не-цели (YAGNI)
 
-- Боевая интеграция auth/logout — отдельная задача (ТЗ §2).
-- Реализация самих будущих экранов (Проекты/Издания/Вендоры/Импорт) — только пункты-заглушки.
-- Второй `ThemeProvider` из tenders — НЕ тащим (в Vendors уже есть свой в `main.tsx`).
-- `react-router-dom` — НЕ добавляем (роутер уже TanStack).
+- Боевая интеграция auth/logout — отдельная задача (ТЗ §2). Юзер-блок в футере —
+  статичный плейсхолдер (имя/роль захардкожены до боевого SSO/RBAC).
+- Реализация экранов «Вендоры»/«Админка» — только заглушка/`disabled`.
+- Глубокие уровни хлебной крошки (тип объекта, издание) — задел, не реализация сейчас.
+- Второй `ThemeProvider` из tenders, `react-router-dom` — НЕ добавляем.
 
 ## Архитектура
 
@@ -39,127 +55,131 @@
 
 - **`AppShell.tsx`** — корневая оболочка. Дерево:
   `SidebarProvider → <div flex min-h-screen> [ AppSidebar | <main flex-1
-  overflow-y-auto> [ AppNavbar + <div px-4><Outlet/></div> ] ] ] + Toaster`.
-  `ThemeProvider` здесь **не** оборачиваем — он уже висит в `main.tsx` над
-  `RouterProvider`. `<Outlet/>` и `SidebarProvider` — из `@tanstack/react-router`
-  и `@/components/ui/sidebar` соответственно.
-- **`AppSidebar.tsx`** — `<Sidebar collapsible="icon">` с шапкой (лого + «Vendors»),
-  `SidebarSeparator`, и `SidebarContent` из групп меню (см. ниже). Ссылки — через
-  TanStack `<Link>`.
-- **`AppNavbar.tsx`** — `<nav>` с `SidebarTrigger` слева; справа — переключатель
-  темы (dropdown Light/Dark/System через `useTheme` Vendors) и avatar-меню
-  (`DropdownMenu` + `Avatar`, пункты статичны/disabled).
+  overflow-y-auto> [ AppHeader + <div px-4><Outlet/></div> ] ] ] + Toaster`.
+  `ThemeProvider` здесь **не** оборачиваем — он уже в `main.tsx`.
+- **`AppSidebar.tsx`** — `<Sidebar collapsible="icon">`:
+  - `SidebarHeader` — marker «М» (фон `sidebar-primary`) + «Вендор-листы».
+  - `SidebarContent` — рабочие пункты навигации (Обзор / Каталог стандартов / Вендоры).
+  - `SidebarFooter` — `SidebarSeparator`; системный пункт **Админка** (`disabled`,
+    «в разработке»); в dev-сборке — пункт **Дизайн-система**; контрол темы; блок юзера.
+    Ссылки — TanStack `<Link>`.
+- **`AppHeader.tsx`** — тонкая шапка: `<SidebarTrigger>` слева + хлебная крошка
+  (`@/components/ui/breadcrumb`). Значения крошки — из активного роута (см. ниже).
 
 ### Интеграция в роутер
 
-В [`frontend/src/router.tsx`](../../../frontend/src/router.tsx) `rootRoute`
-меняется:
+В [`frontend/src/router.tsx`](../../../frontend/src/router.tsx):
 
 ```ts
 // было
 const rootRoute = createRootRoute({ component: () => <Outlet /> })
 // стало
-const rootRoute = createRootRoute({ component: AppShell })
+const rootRoute = createRootRoute({ component: AppShell }) // AppShell рендерит <Outlet/>
 ```
 
-`AppShell` сам рендерит `<Outlet/>`. Все три существующих роута (`/`, `/matrix`,
-`/design-system`) получают оболочку без изменений в их определениях. Экспорт
-`routeTree` не меняется — интеграционные тесты (`router.test.tsx`) продолжают
-строить memory-router из того же дерева.
+Добавляется роут `/vendors` (компонент `VendorsScreen`-заглушка). Существующие роуты
+(`/`, `/matrix`, `/design-system`) получают оболочку без изменений в их определениях.
+Экспорт `routeTree` сохраняется — `router.test.tsx` продолжает строить memory-router
+из того же дерева.
 
-## Навигация
+## Навигация и крошка
 
-Ссылки — `<Link>` из `@tanstack/react-router` (не `react-router-dom`). Активный
-пункт подсвечивается штатной подсветкой TanStack (`activeProps`/`activeOptions`;
-для `/` — `activeOptions={{ exact: true }}`, чтобы не «горел» на всех путях).
+Ссылки — `<Link>` из `@tanstack/react-router`. Активный пункт — штатной подсветкой
+(`activeProps`; для `/` — `activeOptions={{ exact: true }}`).
 
-Группы (`SidebarGroup` + `SidebarGroupLabel`):
+| Секция      | Пункт             | Роут             | Статус                          |
+|-------------|-------------------|------------------|---------------------------------|
+| Навигация   | Обзор             | `/`              | активен                         |
+| Навигация   | Каталог стандартов| `/matrix`        | активен (матрица — старт раздела)|
+| Навигация   | Вендоры           | `/vendors`       | активен (экран-заглушка)        |
+| Футер       | Админка           | —                | `disabled` «в разработке»       |
+| Футер (dev) | Дизайн-система    | `/design-system` | только `import.meta.env.DEV`    |
 
-| Группа       | Пункт                   | Роут              | Статус          |
-|--------------|-------------------------|-------------------|-----------------|
-| Обзор        | Обзор                   | `/`               | активен         |
-| Обзор        | Матрица перечня         | `/matrix`         | активен         |
-| Проекты      | Проекты                 | — (§4)            | disabled «скоро»|
-| Каталог      | Издания                 | — (§5)            | disabled «скоро»|
-| Каталог      | Вендоры и соглашения    | — (§5)            | disabled «скоро»|
-| Импорт       | Импорт Excel            | — (§5)            | disabled «скоро»|
-| Разработка   | Дизайн-система          | `/design-system`  | активен         |
+Данные меню — декларативный массив в `AppSidebar.tsx` (иконки `lucide-react`).
 
-Заглушки: `SidebarMenuButton` с `disabled` (приглушённый вид) + маленький бейдж
-«скоро» (DS `badge`). Не оборачиваются в `<Link>` — некуда вести.
+**Хлебная крошка** (`AppHeader.tsx`): карта `роут → метка раздела`
+(`/`→«Обзор», `/matrix`→«Каталог стандартов», `/vendors`→«Вендоры»,
+`/design-system`→«Дизайн-система»). Реализована как небольшая чистая функция
+(маппинг), чтобы позже безболезненно дописать глубокие уровни (напр. на `/matrix` —
+имя типа объекта из search-параметра). Метку берём из активного роута через
+`useRouterState`.
 
-Данные меню — декларативный массив групп в `AppSidebar.tsx` (иконки `lucide-react`,
-уже в зависимостях). Активные пункты несут `to`, заглушки — `disabled: true`.
+## Футер сайдбара
+
+- **Контрол темы** — кнопка (иконка + текущая тема) → `DropdownMenu`
+  (Светлая / Тёмная / Системная) через существующий `useTheme` Vendors (сохраняем
+  режим «Системная», хоткей «d» уже живёт в `ThemeProvider`).
+- **Блок юзера** — `Avatar` (инициалы «ВЖ»), имя «Владимир Ж.», роль «Редактор»,
+  `DropdownMenu` по клику (Профиль / Настройки / Выход — **неактивны**, плейсхолдер до
+  боевого auth). Имя/роль/инициалы — временные константы; TODO-комментарий со ссылкой
+  на ТЗ §2.
 
 ## Новые компоненты (shadcn, на токенах)
 
-Добавляются в `frontend/src/components/ui/` через `npx shadcn add`:
+В `frontend/src/components/ui/` через `npx shadcn add`:
+`sidebar` (+ транзитивные `sheet`, `tooltip`, `separator`), `dropdown-menu`,
+`avatar`, `breadcrumb`, `sonner`. Зависимость `sonner` — в `package.json`.
 
-- `sidebar` (+ транзитивные `sheet`, `tooltip`, `separator` — если ещё не стоят)
-- `dropdown-menu`
-- `avatar`
-- `sonner`
-
-Зависимость `sonner` добавляется в `frontend/package.json`.
-
-**Токены — уже готовы.** `--sidebar-*` (light+dark) и их `@theme`-маппинг
-`--color-sidebar-*` уже определены в
-[`frontend/src/index.css`](../../../frontend/src/index.css) (строки 13-20, 112-119,
-158-165) из интеграции дизайн-системы. Сайдбар красится темами из коробки —
-дополнительных токенов заводить не нужно, только свериться после `shadcn add`.
+**Токены — уже готовы.** `--sidebar-*` (light+dark) и `@theme`-маппинг
+`--color-sidebar-*` уже в [`index.css`](../../../frontend/src/index.css)
+(строки 13-20, 112-119, 158-165). Сайдбар красится темами из коробки — свериться
+после `shadcn add`.
 
 **react-refresh lint.** `sidebar.tsx` экспортирует хук `useSidebar` и cva-варианты
-вместе с компонентами → правило `react-refresh/only-export-components` заругается.
-Решение — шапка `/* eslint-disable react-refresh/only-export-components */` в
-сгенерированном файле (ровно как уже сделано в
-[`theme-provider.tsx`](../../../frontend/src/components/theme-provider.tsx)). То же —
-для любого другого ui-файла shadcn, где хук/варианты соседствуют с компонентами.
+рядом с компонентами → шапка `/* eslint-disable react-refresh/only-export-components */`
+(как уже в [`theme-provider.tsx`](../../../frontend/src/components/theme-provider.tsx)).
+То же — для любого ui-файла shadcn, где хук/варианты соседствуют с компонентами.
 
-**Стиль shadcn CLI.** После `shadcn add` пройтись `prettier --write` по новым
-файлам (CI гоняет `prettier --check`).
+**Стиль shadcn CLI.** После `shadcn add` — `prettier --write` по новым файлам
+(CI гоняет `prettier --check`).
 
 ## Docstrings
 
-По правилам CLAUDE.md (§Документирование):
-- `AppShell.tsx`, `AppSidebar.tsx`, `AppNavbar.tsx` — модульный docstring (JSDoc
-  `/** */`): за что отвечает + ключевой инвариант/ловушка (напр.: «ThemeProvider
-  здесь НЕ оборачиваем — он в main.tsx»).
-- Нетривиальные детали (подсветка `/` через `exact`, статичность меню юзера) —
-  короткий комментарий по месту.
+По CLAUDE.md (§Документирование): модульный JSDoc на `AppShell`/`AppSidebar`/
+`AppHeader`/`VendorsScreen` (за что отвечает + ключевая ловушка — напр. «ThemeProvider
+здесь НЕ оборачиваем — он в main.tsx»; «имя/роль юзера — плейсхолдер до §2»).
+Нетривиальные детали (подсветка `/` через `exact`, dev-only пункт) — краткий
+комментарий по месту.
 
 ## Тесты (vitest, рядом с кодом)
 
 `frontend/src/components/layout/AppShell.test.tsx` (memory-router из `routeTree`,
 как в `router.test.tsx`):
 
-1. Реальные пункты навигации отрендерены и ведут по правильным `href`
-   (Обзор→`/`, Матрица→`/matrix`, Дизайн-система→`/design-system`).
-2. Пункты-заглушки присутствуют, помечены «скоро» и `disabled` (нет `href`).
-3. Navbar содержит переключатель темы; клик по «Dark»/«Light» вызывает смену темы
-   (класс на `documentElement` меняется).
-4. `SidebarTrigger` присутствует (сворачивание сайдбара доступно).
+1. Рабочие пункты (Обзор→`/`, Каталог стандартов→`/matrix`, Вендоры→`/vendors`)
+   отрендерены и ведут по правильным `href`.
+2. Пункта «Матрица перечня»/«Проекты»/«Импорт Excel» в навигации **нет**.
+3. Админка присутствует, помечена «в разработке» и `disabled` (нет `href`).
+4. Дизайн-система: видна в dev, скрыта вне dev (проверка через мок `import.meta.env.DEV`).
+5. Шапка содержит хлебную крошку с меткой активного раздела и `SidebarTrigger`.
+6. Контрол темы: клик по «Тёмная»/«Светлая» меняет класс на `documentElement`.
 
-MSW-хендлеры для дашборд/матрица-запросов дочерних экранов не нужны, если тест
-монтирует оболочку на маршруте без сетевых загрузчиков (напр. `/design-system`) или
-мокает минимально — тест проверяет оболочку, не контент экранов.
+Тест монтирует оболочку на маршруте без сетевых загрузчиков (напр. `/design-system`
+или `/vendors`), чтобы проверять оболочку, а не контент экранов (MSW-моки не нужны).
 
 ## Проверки перед PR
 
 - Ветка `feat/app-shell-layout` от `main`.
-- Финал — локальный `just ci` (types не требуется — OpenAPI не трогаем; но ci
-  включает prettier/eslint/tsc/vitest — всё должно быть зелёным).
-- PR в `main`, `main` держим зелёным.
+- Финал — локальный `just ci` (prettier/eslint/tsc/vitest; `just types` не нужен —
+  OpenAPI не трогаем). `main` держим зелёным, мерж через PR.
 
 ## Файлы (сводка изменений)
 
 **Новые:**
-- `frontend/src/components/layout/AppShell.tsx`
-- `frontend/src/components/layout/AppSidebar.tsx`
-- `frontend/src/components/layout/AppNavbar.tsx`
+- `frontend/src/components/layout/{AppShell,AppSidebar,AppHeader}.tsx`
 - `frontend/src/components/layout/AppShell.test.tsx`
-- `frontend/src/components/ui/{sidebar,dropdown-menu,avatar,sonner,sheet,tooltip,separator}.tsx`
-  (набор транзитивных — по факту `shadcn add`)
+- `frontend/src/screens/vendors/VendorsScreen.tsx` (заглушка «в разработке»)
+- `frontend/src/components/ui/{sidebar,dropdown-menu,avatar,breadcrumb,sonner,sheet,tooltip,separator}.tsx`
+  (по факту `shadcn add`)
 
 **Изменяемые:**
-- `frontend/src/router.tsx` — `rootRoute.component = AppShell`
-- `frontend/package.json` / lock — `sonner` и прочие радикс-зависимости shadcn
+- `frontend/src/router.tsx` — `rootRoute.component = AppShell`; новый роут `/vendors`
+- `frontend/package.json` / lock — `sonner` и радикс-зависимости shadcn
+
+## Порядок слайсов (для плана)
+
+1. Установка shadcn-компонентов + сверка токенов + prettier/eslint-фиксы.
+2. `AppSidebar` (навигация + футер темы/юзера) на статике.
+3. `AppHeader` + хлебная крошка (маппинг роутов).
+4. `AppShell` + интеграция в `router.tsx` + `/vendors` заглушка.
+5. Тесты оболочки; финальный `just ci`.
