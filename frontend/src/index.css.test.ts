@@ -1,7 +1,12 @@
+// @vitest-environment node
 import { readFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
-const css = readFileSync("src/index.css", "utf-8")
+const css = readFileSync(
+  fileURLToPath(new URL("./index.css", import.meta.url)),
+  "utf-8"
+)
 
 describe("warning status token", () => {
   it("объявлен в светлой теме (:root)", () => {
