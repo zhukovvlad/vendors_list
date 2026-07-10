@@ -27,6 +27,7 @@
     --color-input: var(--input);
     --color-border: var(--border);
     --color-destructive: var(--destructive);
+    --color-warning: var(--warning);
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
     --color-muted-foreground: var(--muted-foreground);
@@ -95,6 +96,7 @@
     --destructive: #CF4157;                /* мягкие danger: текст/бордер/бейдж */
     --destructive-solid: #CF4157;          /* сплошная danger-кнопка (обе темы) */
     --destructive-foreground: #FFFFFF;
+    --warning: #9A6636;                    /* статус: предупреждение (= chart-3) */
     --accent-subtle: rgba(117, 74, 232, 0.10);  /* подложка subtle-варианта (light) */
     --border: #E4E1EE;
     --border-strong: #CFCADF;
@@ -142,6 +144,7 @@
     --destructive: #E8657A;                /* мягкие danger: светлый хью на тёмном */
     --destructive-solid: #CF4157;          /* сплошная danger-кнопка (обе темы) */
     --destructive-foreground: #FFFFFF;
+    --warning: #BD9375;                    /* статус: предупреждение (= chart-3) */
     --accent-subtle: rgba(117, 74, 232, 0.16);  /* подложка subtle-варианта (dark, плотнее) */
     --border: #2A2640;
     --border-strong: #3A3556;

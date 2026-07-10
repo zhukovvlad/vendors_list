@@ -200,3 +200,28 @@ class Selection(BaseModel):
     vendor_id: int
     rationale: str | None
     source_ref: str | None
+
+
+# --- Дашборд «Обзор» --------------------------------------------------------
+class DashboardSummary(BaseModel):
+    positions_active: int
+    releases_published: int
+    drafts_open: int
+    vendors_total: int
+    vendors_with_agreement: int
+    merge_candidate_pairs: int | None  # None ⇒ детект не отработал (не 500)
+
+
+class DashboardDraft(BaseModel):
+    model_config = _from_row
+    release_id: int
+    building_type_name: str
+    label: str
+    last_touched_at: datetime
+    last_touched_by: str | None
+    is_stale: bool
+
+
+class Dashboard(BaseModel):
+    summary: DashboardSummary
+    drafts: list[DashboardDraft]

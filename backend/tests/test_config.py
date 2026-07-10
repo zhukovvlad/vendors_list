@@ -26,3 +26,16 @@ def test_database_url_test_normalizes_raw_neon_url() -> None:
 def test_database_url_test_normalization_is_idempotent() -> None:
     s = Settings(database_url_test="postgresql+asyncpg://u:p@host/db?ssl=require")
     assert s.database_url_test == "postgresql+asyncpg://u:p@host/db?ssl=require"
+
+
+def test_dashboard_stale_days_default() -> None:
+    from app.config import Settings
+
+    assert Settings().dashboard_stale_days == 14
+
+
+def test_dashboard_stale_days_from_env(monkeypatch) -> None:
+    from app.config import Settings
+
+    monkeypatch.setenv("DASHBOARD_STALE_DAYS", "7")
+    assert Settings().dashboard_stale_days == 7

@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest"
 import { routeTree } from "@/router"
 import { server } from "@/test/msw/server"
 
-function makeRouter(initial = "/?building_type_id=1") {
+function makeRouter(initial = "/matrix?building_type_id=1") {
   return createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: [initial] }),
