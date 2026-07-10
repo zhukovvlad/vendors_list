@@ -22,6 +22,7 @@
 - **Роутер — TanStack Router** (не react-router).
 - **Гейт на каждом таске:** backend-таск — миграция применяется/`pytest` зелёный; frontend-таск — `npm run build` + `npm run lint` + `npm run test`. Перед PR — полный `just ci`.
 - **MSW:** `server.listen()` уже висит синхронно в `setup.ts` — не трогать.
+- **Docstrings в стиле репо:** каждый новый **модуль** — docstring (за что отвечает + инварианты/ловушки); **нетривиальные** функции/классы — docstring с «почему»/крайними случаями. Тривиальное (имя = поведение) не документируем — без шума. Python — `"""..."""`; TS/TSX — JSDoc `/** */` на нетривиальных экспортах. Образцы: [db.py](../../../backend/app/db.py), [conftest.py](../../../backend/tests/conftest.py), [queries.ts](../../../frontend/src/api/queries.ts).
 - **db-тесты** идут против тест-ветки Neon (маркер `pytest.mark.db`); без `DATABASE_URL_TEST` скипаются. Изоляция — откат транзакции (`db_conn`).
 
 **Ветка:** `feat/dashboard-overview` (уже создана; дизайн-док в ней).
