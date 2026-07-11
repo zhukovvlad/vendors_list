@@ -249,3 +249,27 @@ class VendorCard(BaseModel):
     represents: VendorRepresents | None
     represented_count: int
     aliases: list[VendorAlias]
+
+
+class WhereAllowedChip(BaseModel):
+    segment_id: int
+    segment_name: str
+    state: str                    # 'allowed' | 'excluded'
+    release_label: str | None     # для 'excluded' — тултип
+
+
+class WhereAllowedPosition(BaseModel):
+    position_id: int
+    position_name: str
+    chips: list[WhereAllowedChip]
+
+
+class WhereAllowedStandard(BaseModel):
+    building_type_id: int
+    building_type_name: str
+    position_count: int
+    positions: list[WhereAllowedPosition]
+
+
+class WhereAllowed(BaseModel):
+    standards: list[WhereAllowedStandard]

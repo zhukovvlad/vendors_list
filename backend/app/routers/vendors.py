@@ -13,7 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from ..auth import require_user
 from ..db import read_conn
-from ..schemas import VendorAlias, VendorCard, VendorRepresents
+from ..schemas import (
+    VendorAlias,
+    VendorCard,
+    VendorRepresents,
+    WhereAllowed,
+    WhereAllowedChip,
+    WhereAllowedPosition,
+    WhereAllowedStandard,
+)
 
 router = APIRouter(prefix="/vendors", tags=["vendors"])
 
@@ -67,3 +75,51 @@ async def get_vendor(vendor_id: int, conn: AsyncConnection = Depends(read_conn))
         represented_count=represented_count,
         aliases=aliases,
     )
+
+
+@router.get(
+    "/{vendor_id}/where-allowed",
+    response_model=WhereAllowed,
+    dependencies=[Depends(require_user)],
+)
+async def get_where_allowed(
+    vendor_id: int, conn: AsyncConnection = Depends(read_conn)
+) -> WhereAllowed:
+    rows = (
+        await conn.execute(
+            text("SELECT * FROM vendor_where_allowed(:v)"), {"v": vendor_id}
+        )
+    ).mappings().all()
+
+    # Строки уже упорядочены (тип → позиция → класс) — группируем последовательно.
+    standards: list[WhereAllowedStandard] = []
+    for r in rows:
+        if not standards or standards[-1].building_type_id != r["building_type_id"]:
+            standards.append(
+                WhereAllowedStandard(
+                    building_type_id=r["building_type_id"],
+                    building_type_name=r["building_type_name"],
+                    position_count=0,
+                    positions=[],
+                )
+            )
+        std = standards[-1]
+        if not std.positions or std.positions[-1].position_id != r["position_id"]:
+            std.positions.append(
+                WhereAllowedPosition(
+                    position_id=r["position_id"],
+                    position_name=r["position_name"],
+                    chips=[],
+                )
+            )
+            std.position_count += 1
+        std.positions[-1].chips.append(
+            WhereAllowedChip(
+                segment_id=r["segment_id"],
+                segment_name=r["segment_name"],
+                state=r["state"],
+                release_label=r["release_label"],
+            )
+        )
+
+    return WhereAllowed(standards=standards)
