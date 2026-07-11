@@ -1,7 +1,14 @@
+import { useState } from "react"
 import { Link } from "@tanstack/react-router"
-import { Star } from "lucide-react"
+import { Star, X } from "lucide-react"
 
-import { useVendor, useVendorWhereAllowed } from "@/api/queries"
+import {
+  useAddAlias,
+  useRemoveAlias,
+  useToggleAgreement,
+  useVendor,
+  useVendorWhereAllowed,
+} from "@/api/queries"
 import {
   Accordion,
   AccordionContent,
@@ -20,11 +27,22 @@ export function VendorCardScreen() {
   const id = Number(vendorId)
   const { data, isPending, isError } = useVendor(id)
   const whereAllowed = useVendorWhereAllowed(id)
+  const toggleAgreement = useToggleAgreement(id)
+  const addAlias = useAddAlias(id)
+  const removeAlias = useRemoveAlias(id)
+  const [aliasOpen, setAliasOpen] = useState(false)
+  const [aliasDraft, setAliasDraft] = useState("")
 
   if (isPending)
-    return <div className="py-16 text-center text-muted-foreground">Загрузка…</div>
+    return (
+      <div className="py-16 text-center text-muted-foreground">Загрузка…</div>
+    )
   if (isError || !data)
-    return <div className="py-16 text-center text-muted-foreground">Вендор не найден</div>
+    return (
+      <div className="py-16 text-center text-muted-foreground">
+        Вендор не найден
+      </div>
+    )
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 py-6">
@@ -43,7 +61,8 @@ export function VendorCardScreen() {
             Соглашение
             <Switch
               checked={data.starred}
-              disabled
+              disabled={toggleAgreement.isPending}
+              onCheckedChange={(next) => toggleAgreement.mutate(next)}
               aria-label="Соглашение о сотрудничестве"
             />
           </label>
@@ -73,23 +92,65 @@ export function VendorCardScreen() {
       )}
 
       <section className="space-y-2">
-        <div className="text-caption uppercase text-muted-foreground">
+        <div className="text-caption text-muted-foreground uppercase">
           Варианты написания
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {data.aliases.length === 0 && (
             <span className="text-small text-muted-foreground">—</span>
           )}
           {data.aliases.map((a) => (
-            <Badge key={a.id} variant="outline">
+            <Badge key={a.id} variant="outline" className="gap-1">
               {a.alias}
+              <button
+                type="button"
+                aria-label={`удалить ${a.alias}`}
+                onClick={() => removeAlias.mutate(a.id)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3" />
+              </button>
             </Badge>
           ))}
+          {aliasOpen ? (
+            <span className="flex items-center gap-1">
+              <input
+                autoFocus
+                value={aliasDraft}
+                onChange={(e) => setAliasDraft(e.target.value)}
+                placeholder="вариант написания"
+                className="h-7 rounded-sm border bg-transparent px-2 text-small"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={aliasDraft.trim() === "" || addAlias.isPending}
+                onClick={() => {
+                  addAlias.mutate(aliasDraft.trim(), {
+                    onSuccess: () => {
+                      setAliasDraft("")
+                      setAliasOpen(false)
+                    },
+                  })
+                }}
+              >
+                Добавить
+              </Button>
+            </span>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setAliasOpen(true)}
+            >
+              + вариант
+            </Button>
+          )}
         </div>
       </section>
 
       <section className="space-y-2">
-        <div className="text-caption uppercase text-muted-foreground">
+        <div className="text-caption text-muted-foreground uppercase">
           Бренд и объединение
         </div>
         {data.represented_count > 0 && (
@@ -103,10 +164,15 @@ export function VendorCardScreen() {
       </section>
 
       <section className="space-y-2">
-        <div className="text-caption uppercase text-muted-foreground">Где разрешён</div>
+        <div className="text-caption text-muted-foreground uppercase">
+          Где разрешён
+        </div>
         <Accordion type="multiple">
           {(whereAllowed.data?.standards ?? []).map((s) => (
-            <AccordionItem key={s.building_type_id} value={String(s.building_type_id)}>
+            <AccordionItem
+              key={s.building_type_id}
+              value={String(s.building_type_id)}
+            >
               <AccordionTrigger>
                 <span className="flex-1 text-left">{s.building_type_name}</span>
                 <span className="text-small text-muted-foreground">
@@ -142,7 +208,9 @@ export function VendorCardScreen() {
             </AccordionItem>
           ))}
         </Accordion>
-        <p className="text-caption text-muted-foreground">{WHERE_ALLOWED_LEGEND}</p>
+        <p className="text-caption text-muted-foreground">
+          {WHERE_ALLOWED_LEGEND}
+        </p>
       </section>
     </div>
   )

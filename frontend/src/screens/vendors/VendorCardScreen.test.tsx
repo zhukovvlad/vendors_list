@@ -4,7 +4,7 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router"
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { http, HttpResponse } from "msw"
 import { describe, expect, it } from "vitest"
@@ -32,7 +32,9 @@ function renderAt(path = "/vendors/5") {
 describe("VendorCardScreen — шапка", () => {
   it("рисует имя, локализованный тип, пилюлю соглашения и статус бренда", async () => {
     renderAt()
-    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("System Air")
+    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(
+      "System Air"
+    )
     expect(screen.getByText("производитель")).toBeInTheDocument()
     expect(screen.getByText("соглашение")).toBeInTheDocument()
     expect(screen.getByText("самостоятельный бренд")).toBeInTheDocument()
@@ -84,5 +86,42 @@ describe("VendorCardScreen — Где разрешён", () => {
   it("свёрнутый стандарт показывает счётчик позиций", async () => {
     renderAt()
     expect(await screen.findByText("1 позиций")).toBeInTheDocument()
+  })
+})
+
+describe("VendorCardScreen — мутации", () => {
+  it("клик по тумблеру шлёт PUT /agreement", async () => {
+    let putBody: unknown = null
+    server.use(
+      http.put("/api/vendors/:vendorId/agreement", async ({ request }) => {
+        putBody = await request.json()
+        return HttpResponse.json({ starred: false })
+      })
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(
+      screen.getByRole("switch", { name: "Соглашение о сотрудничестве" })
+    )
+    await waitFor(() => expect(putBody).toEqual({ active: false }))
+  })
+
+  it("добавление alias шлёт POST", async () => {
+    let posted: unknown = null
+    server.use(
+      http.post("/api/vendors/:vendorId/aliases", async ({ request }) => {
+        posted = await request.json()
+        return HttpResponse.json({ id: 9, alias: "NewAlias" }, { status: 201 })
+      })
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(screen.getByRole("button", { name: "+ вариант" }))
+    await userEvent.type(
+      screen.getByPlaceholderText("вариант написания"),
+      "NewAlias"
+    )
+    await userEvent.click(screen.getByRole("button", { name: "Добавить" }))
+    await waitFor(() => expect(posted).toEqual({ alias: "NewAlias" }))
   })
 })

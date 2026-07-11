@@ -19,7 +19,7 @@ export function renderCell(cell: MatrixCell | null) {
             key={v.vendor_id}
             to="/vendors/$vendorId"
             params={{ vendorId: String(v.vendor_id) }}
-            className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             <Badge
               variant="outline"

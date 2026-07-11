@@ -78,8 +78,18 @@ export const whereAllowedFixture = {
           position_id: 100,
           position_name: "Радиаторы отопления",
           chips: [
-            { segment_id: 11, segment_name: "Делюкс", state: "allowed", release_label: null },
-            { segment_id: 14, segment_name: "Бизнес", state: "excluded", release_label: "ред. 25.03.2026" },
+            {
+              segment_id: 11,
+              segment_name: "Делюкс",
+              state: "allowed",
+              release_label: null,
+            },
+            {
+              segment_id: 14,
+              segment_name: "Бизнес",
+              state: "excluded",
+              release_label: "ред. 25.03.2026",
+            },
           ],
         },
       ],

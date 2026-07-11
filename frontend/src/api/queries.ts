@@ -2,7 +2,12 @@
  * Хуки данных на TanStack Query поверх типизированного клиента.
  * Примеры покрывают главный сценарий (просмотр): матрица перечня и сводка проекта.
  */
-import { keepPreviousData, useQuery } from "@tanstack/react-query"
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query"
 
 import { api } from "./client"
 
@@ -139,12 +144,61 @@ export function useVendorWhereAllowed(id: number) {
   return useQuery({
     queryKey: ["vendor-where-allowed", id],
     queryFn: async () => {
-      const { data, error } = await api.GET("/vendors/{vendor_id}/where-allowed", {
-        params: { path: { vendor_id: id } },
-      })
+      const { data, error } = await api.GET(
+        "/vendors/{vendor_id}/where-allowed",
+        {
+          params: { path: { vendor_id: id } },
+        }
+      )
       if (error) throw error
       if (!data) throw new Error("Пустой ответ /vendors/{id}/where-allowed")
       return data
     },
+  })
+}
+
+export function useToggleAgreement(id: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (active: boolean) => {
+      const { data, error } = await api.PUT("/vendors/{vendor_id}/agreement", {
+        params: { path: { vendor_id: id } },
+        body: { active },
+      })
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vendor", id] }),
+  })
+}
+
+export function useAddAlias(id: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (alias: string) => {
+      const { data, error } = await api.POST("/vendors/{vendor_id}/aliases", {
+        params: { path: { vendor_id: id } },
+        body: { alias },
+      })
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vendor", id] }),
+  })
+}
+
+export function useRemoveAlias(id: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (aliasId: number) => {
+      const { error } = await api.DELETE(
+        "/vendors/{vendor_id}/aliases/{alias_id}",
+        {
+          params: { path: { vendor_id: id, alias_id: aliasId } },
+        }
+      )
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vendor", id] }),
   })
 }
