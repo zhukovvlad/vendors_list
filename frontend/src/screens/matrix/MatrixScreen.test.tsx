@@ -106,4 +106,13 @@ describe("MatrixScreen", () => {
       expect(router.state.location.search).toMatchObject({ offset: 50 })
     )
   })
+
+  it("клик по вендор-тегу ведёт на карточку /vendors/$id", async () => {
+    const router = makeRouter()
+    renderWith(router)
+    await userEvent.click(await screen.findByText("Grundfos"))
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/vendors/5")
+    )
+  })
 })

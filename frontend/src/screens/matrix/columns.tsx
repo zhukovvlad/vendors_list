@@ -1,4 +1,5 @@
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table"
+import { Link } from "@tanstack/react-router"
 import { Star } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -14,22 +15,29 @@ export function renderCell(cell: MatrixCell | null) {
     return (
       <div className="flex flex-wrap gap-1">
         {cell.vendors.map((v) => (
-          <Badge
+          <Link
             key={v.vendor_id}
-            variant="outline"
-            title={v.note ?? undefined}
+            to="/vendors/$vendorId"
+            params={{ vendorId: String(v.vendor_id) }}
+            className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {v.starred && (
-              <Star
-                className="size-3 fill-current"
-                aria-label="действующее соглашение"
-              />
-            )}
-            {v.name}
-            {v.ujin_integration && (
-              <span className="text-caption text-muted-foreground">Ujin</span>
-            )}
-          </Badge>
+            <Badge
+              variant="outline"
+              title={v.note ?? undefined}
+              className="cursor-pointer hover:border-foreground/40 hover:bg-accent"
+            >
+              {v.starred && (
+                <Star
+                  className="size-3 fill-current"
+                  aria-label="действующее соглашение"
+                />
+              )}
+              {v.name}
+              {v.ujin_integration && (
+                <span className="text-caption text-muted-foreground">Ujin</span>
+              )}
+            </Badge>
+          </Link>
         ))}
       </div>
     )
