@@ -7,13 +7,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from ..auth import require_user
-from ..db import read_conn
+from ..auth import CurrentUser, require_admin, require_user
+from ..db import read_conn, tx
 from ..schemas import (
+    AgreementToggle,
+    AliasCreate,
     VendorAlias,
     VendorCard,
     VendorRepresents,
@@ -123,3 +126,93 @@ async def get_where_allowed(
         )
 
     return WhereAllowed(standards=standards)
+
+
+async def _ensure_vendor(conn: AsyncConnection, vendor_id: int) -> None:
+    exists = (
+        await conn.execute(text("SELECT 1 FROM vendor WHERE id = :id"), {"id": vendor_id})
+    ).scalar_one_or_none()
+    if exists is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Вендор не найден")
+
+
+@router.put("/{vendor_id}/agreement")
+async def toggle_agreement(
+    vendor_id: int,
+    body: AgreementToggle,
+    _admin: CurrentUser = Depends(require_admin),
+    conn: AsyncConnection = Depends(tx),
+) -> dict[str, bool]:
+    """Тумблер соглашения (O1). Асимметрично, инвариант «одна активная строка»:
+    вкл на уже активном — no-op (UPDATE не выполняем, чтобы не засорять аудит);
+    иначе INSERT новой active (историю expired/terminated НЕ реанимируем).
+    Выкл — терминируем активную. Аудит пишет триггер (changed_by = app.user)."""
+    await _ensure_vendor(conn, vendor_id)
+    if body.active:
+        has_active = (
+            await conn.execute(
+                text("SELECT 1 FROM agreement WHERE vendor_id = :id AND status = 'active'"),
+                {"id": vendor_id},
+            )
+        ).scalar_one_or_none()
+        if has_active is None:
+            await conn.execute(
+                text("INSERT INTO agreement (vendor_id, status) VALUES (:id, 'active')"),
+                {"id": vendor_id},
+            )
+    else:
+        await conn.execute(
+            text(
+                "UPDATE agreement SET status = 'terminated' "
+                "WHERE vendor_id = :id AND status = 'active'"
+            ),
+            {"id": vendor_id},
+        )
+    starred = (
+        await conn.execute(text("SELECT vendor_starred(:id)"), {"id": vendor_id})
+    ).scalar_one()
+    return {"starred": starred}
+
+
+@router.post(
+    "/{vendor_id}/aliases",
+    response_model=VendorAlias,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_alias(
+    vendor_id: int,
+    body: AliasCreate,
+    _admin: CurrentUser = Depends(require_admin),
+    conn: AsyncConnection = Depends(tx),
+) -> VendorAlias:
+    await _ensure_vendor(conn, vendor_id)
+    try:
+        row = (
+            await conn.execute(
+                text(
+                    "INSERT INTO vendor_alias (vendor_id, alias) "
+                    "VALUES (:v, :a) RETURNING id, alias"
+                ),
+                {"v": vendor_id, "a": body.alias},
+            )
+        ).mappings().one()
+    except DBAPIError as exc:
+        # alias UNIQUE глобально → нарушение уникальности = 409
+        raise HTTPException(status.HTTP_409_CONFLICT, "Такой вариант написания уже занят") from exc
+    return VendorAlias.model_validate(dict(row))
+
+
+@router.delete("/{vendor_id}/aliases/{alias_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_alias(
+    vendor_id: int,
+    alias_id: int,
+    _admin: CurrentUser = Depends(require_admin),
+    conn: AsyncConnection = Depends(tx),
+) -> Response:
+    res = await conn.execute(
+        text("DELETE FROM vendor_alias WHERE id = :a AND vendor_id = :v"),
+        {"a": alias_id, "v": vendor_id},
+    )
+    if res.rowcount == 0:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Вариант написания не найден")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

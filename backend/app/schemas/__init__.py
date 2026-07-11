@@ -273,3 +273,12 @@ class WhereAllowedStandard(BaseModel):
 
 class WhereAllowed(BaseModel):
     standards: list[WhereAllowedStandard]
+
+
+# --- Мутации карточки вендора ------------------------------------------------
+class AgreementToggle(BaseModel):
+    active: bool
+
+
+class AliasCreate(BaseModel):
+    alias: str = Field(min_length=1)
