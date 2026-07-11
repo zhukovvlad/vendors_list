@@ -120,3 +120,17 @@ export function useDashboard() {
     },
   })
 }
+
+export function useVendor(id: number) {
+  return useQuery({
+    queryKey: ["vendor", id],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/vendors/{vendor_id}", {
+        params: { path: { vendor_id: id } },
+      })
+      if (error) throw error
+      if (!data) throw new Error("Пустой ответ /vendors/{id}")
+      return data
+    },
+  })
+}
