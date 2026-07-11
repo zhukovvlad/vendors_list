@@ -5,6 +5,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router"
 import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { http, HttpResponse } from "msw"
 import { describe, expect, it } from "vitest"
 
@@ -63,5 +64,25 @@ describe("VendorCardScreen — шапка", () => {
     renderAt()
     await screen.findByRole("heading", { level: 1 })
     expect(screen.queryByText("соглашение")).not.toBeInTheDocument()
+  })
+})
+
+describe("VendorCardScreen — Где разрешён", () => {
+  it("раскрывает стандарт, показывает allowed-чип и зачёркнутый excluded с тултипом", async () => {
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(screen.getByText("Жилой дом"))
+    expect(await screen.findByText("Делюкс")).toBeInTheDocument()
+    const excluded = screen.getByText("Бизнес")
+    // тултип/aria исключённого чипа несёт label релиза
+    expect(excluded).toHaveAttribute(
+      "aria-label",
+      "Был в релизе «ред. 25.03.2026», исключён в текущем черновике"
+    )
+  })
+
+  it("свёрнутый стандарт показывает счётчик позиций", async () => {
+    renderAt()
+    expect(await screen.findByText("1 позиций")).toBeInTheDocument()
   })
 })

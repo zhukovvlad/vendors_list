@@ -134,3 +134,17 @@ export function useVendor(id: number) {
     },
   })
 }
+
+export function useVendorWhereAllowed(id: number) {
+  return useQuery({
+    queryKey: ["vendor-where-allowed", id],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/vendors/{vendor_id}/where-allowed", {
+        params: { path: { vendor_id: id } },
+      })
+      if (error) throw error
+      if (!data) throw new Error("Пустой ответ /vendors/{id}/where-allowed")
+      return data
+    },
+  })
+}

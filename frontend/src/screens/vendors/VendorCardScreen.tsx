@@ -1,18 +1,25 @@
 import { Link } from "@tanstack/react-router"
 import { Star } from "lucide-react"
 
-import { useVendor } from "@/api/queries"
+import { useVendor, useVendorWhereAllowed } from "@/api/queries"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { vendorCardRoute } from "@/router"
 
-import { kindLabel } from "./model"
+import { excludedTooltip, kindLabel, WHERE_ALLOWED_LEGEND } from "./model"
 
 export function VendorCardScreen() {
   const { vendorId } = vendorCardRoute.useParams()
   const id = Number(vendorId)
   const { data, isPending, isError } = useVendor(id)
+  const whereAllowed = useVendorWhereAllowed(id)
 
   if (isPending)
     return <div className="py-16 text-center text-muted-foreground">Загрузка…</div>
@@ -93,6 +100,49 @@ export function VendorCardScreen() {
         <Button variant="outline" disabled title="в разработке">
           Объединить
         </Button>
+      </section>
+
+      <section className="space-y-2">
+        <div className="text-caption uppercase text-muted-foreground">Где разрешён</div>
+        <Accordion type="multiple">
+          {(whereAllowed.data?.standards ?? []).map((s) => (
+            <AccordionItem key={s.building_type_id} value={String(s.building_type_id)}>
+              <AccordionTrigger>
+                <span className="flex-1 text-left">{s.building_type_name}</span>
+                <span className="text-small text-muted-foreground">
+                  {s.position_count} позиций
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="space-y-3">
+                {s.positions.map((p) => (
+                  <div key={p.position_id} className="space-y-1.5">
+                    <div className="text-small">{p.position_name}</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {p.chips.map((c) =>
+                        c.state === "allowed" ? (
+                          <Badge key={c.segment_id} variant="outline">
+                            {c.segment_name}
+                          </Badge>
+                        ) : (
+                          <Badge
+                            key={c.segment_id}
+                            variant="outline"
+                            className="border-dashed text-muted-foreground line-through"
+                            title={excludedTooltip(c.release_label)}
+                            aria-label={excludedTooltip(c.release_label)}
+                          >
+                            {c.segment_name}
+                          </Badge>
+                        )
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+        <p className="text-caption text-muted-foreground">{WHERE_ALLOWED_LEGEND}</p>
       </section>
     </div>
   )
