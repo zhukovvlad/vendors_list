@@ -218,15 +218,30 @@ async def make_segment(
 
 
 async def make_release_listing(
-    conn: AsyncConnection, release_id: int, position_id: int, status: str = "allowed"
+    conn: AsyncConnection,
+    release_id: int,
+    position_id: int,
+    segment_id: int | None = None,
+    vendor_id: int | None = None,
+    status: str = "allowed",
 ) -> int:
     """Минимальная строка снимка издания (release_listing без триггеров)."""
     return (
         await conn.execute(
             text(
-                "INSERT INTO release_listing (release_id, position_id, status) "
-                "VALUES (:r, :p, :st) RETURNING id"
+                "INSERT INTO release_listing "
+                "(release_id, position_id, segment_id, vendor_id, status) "
+                "VALUES (:r, :p, :s, :v, :st) RETURNING id"
             ),
-            {"r": release_id, "p": position_id, "st": status},
+            {"r": release_id, "p": position_id, "s": segment_id, "v": vendor_id, "st": status},
+        )
+    ).scalar_one()
+
+
+async def make_alias(conn: AsyncConnection, vendor_id: int, alias: str) -> int:
+    return (
+        await conn.execute(
+            text("INSERT INTO vendor_alias (vendor_id, alias) VALUES (:v, :a) RETURNING id"),
+            {"v": vendor_id, "a": alias},
         )
     ).scalar_one()
