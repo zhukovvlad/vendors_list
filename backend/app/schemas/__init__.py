@@ -225,3 +225,27 @@ class DashboardDraft(BaseModel):
 class Dashboard(BaseModel):
     summary: DashboardSummary
     drafts: list[DashboardDraft]
+
+
+# --- Карточка вендора --------------------------------------------------------
+class VendorAlias(BaseModel):
+    model_config = _from_row
+    id: int
+    alias: str
+
+
+class VendorRepresents(BaseModel):
+    model_config = _from_row
+    id: int
+    name: str
+
+
+class VendorCard(BaseModel):
+    id: int
+    name: str
+    kind: str
+    note: str | None
+    starred: bool
+    represents: VendorRepresents | None
+    represented_count: int
+    aliases: list[VendorAlias]
