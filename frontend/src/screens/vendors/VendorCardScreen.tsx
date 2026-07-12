@@ -64,7 +64,7 @@ export function VendorCardScreen() {
       {/* Шапка */}
       <section className={`${CARD} px-5 py-[18px]`}>
         <div className="flex items-center gap-3.5">
-          <div className="text-h4 flex size-11 shrink-0 items-center justify-center rounded-xl border border-border bg-accent font-medium text-primary">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-border bg-accent text-h3 font-medium text-primary">
             {avatarInitial(data.name)}
           </div>
           <div className="min-w-0 flex-1">
