@@ -20,7 +20,13 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { vendorCardRoute } from "@/router"
 
-import { excludedTooltip, kindLabel, WHERE_ALLOWED_LEGEND } from "./model"
+import {
+  excludedTooltip,
+  hasExcludedChips,
+  kindLabel,
+  WHERE_ALLOWED_EMPTY,
+  whereAllowedLegend,
+} from "./model"
 
 export function VendorCardScreen() {
   const { vendorId } = vendorCardRoute.useParams()
@@ -43,6 +49,8 @@ export function VendorCardScreen() {
         Вендор не найден
       </div>
     )
+
+  const standards = whereAllowed.data?.standards ?? []
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 py-6">
@@ -167,50 +175,66 @@ export function VendorCardScreen() {
         <div className="text-caption text-muted-foreground uppercase">
           Где разрешён
         </div>
-        <Accordion type="multiple">
-          {(whereAllowed.data?.standards ?? []).map((s) => (
-            <AccordionItem
-              key={s.building_type_id}
-              value={String(s.building_type_id)}
-            >
-              <AccordionTrigger>
-                <span className="flex-1 text-left">{s.building_type_name}</span>
-                <span className="text-small text-muted-foreground">
-                  {s.position_count} позиций
-                </span>
-              </AccordionTrigger>
-              <AccordionContent className="space-y-3">
-                {s.positions.map((p) => (
-                  <div key={p.position_id} className="space-y-1.5">
-                    <div className="text-small">{p.position_name}</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {p.chips.map((c) =>
-                        c.state === "allowed" ? (
-                          <Badge key={c.segment_id} variant="outline">
-                            {c.segment_name}
-                          </Badge>
-                        ) : (
-                          <Badge
-                            key={c.segment_id}
-                            variant="outline"
-                            className="border-dashed text-muted-foreground line-through"
-                            title={excludedTooltip(c.release_label)}
-                            aria-label={excludedTooltip(c.release_label)}
-                          >
-                            {c.segment_name}
-                          </Badge>
-                        )
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
-        <p className="text-caption text-muted-foreground">
-          {WHERE_ALLOWED_LEGEND}
-        </p>
+        {whereAllowed.isPending ? (
+          <div className="text-small text-muted-foreground">Загрузка…</div>
+        ) : whereAllowed.isError ? (
+          <div className="text-small text-muted-foreground">
+            Не удалось загрузить
+          </div>
+        ) : standards.length === 0 ? (
+          <div className="text-small text-muted-foreground">
+            {WHERE_ALLOWED_EMPTY}
+          </div>
+        ) : (
+          <>
+            <Accordion type="multiple">
+              {standards.map((s) => (
+                <AccordionItem
+                  key={s.building_type_id}
+                  value={String(s.building_type_id)}
+                >
+                  <AccordionTrigger>
+                    <span className="flex-1 text-left">
+                      {s.building_type_name}
+                    </span>
+                    <span className="text-small text-muted-foreground">
+                      {s.position_count} позиций
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-3">
+                    {s.positions.map((p) => (
+                      <div key={p.position_id} className="space-y-1.5">
+                        <div className="text-small">{p.position_name}</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {p.chips.map((c) =>
+                            c.state === "allowed" ? (
+                              <Badge key={c.segment_id} variant="outline">
+                                {c.segment_name}
+                              </Badge>
+                            ) : (
+                              <Badge
+                                key={c.segment_id}
+                                variant="outline"
+                                className="border-dashed text-muted-foreground line-through"
+                                title={excludedTooltip(c.release_label)}
+                                aria-label={excludedTooltip(c.release_label)}
+                              >
+                                {c.segment_name}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+            <p className="text-caption text-muted-foreground">
+              {whereAllowedLegend(hasExcludedChips(standards))}
+            </p>
+          </>
+        )}
       </section>
     </div>
   )

@@ -87,6 +87,55 @@ describe("VendorCardScreen — Где разрешён", () => {
     renderAt()
     expect(await screen.findByText("1 позиций")).toBeInTheDocument()
   })
+
+  it("пустой вендор: заголовок + «нигде не разрешён», без легенды про зачёркивание", async () => {
+    server.use(
+      http.get("/api/vendors/:vendorId/where-allowed", () =>
+        HttpResponse.json({ standards: [] })
+      )
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    expect(screen.getByText("Где разрешён")).toBeInTheDocument()
+    expect(await screen.findByText("нигде не разрешён")).toBeInTheDocument()
+    expect(screen.queryByText(/зачёркнутый класс/)).not.toBeInTheDocument()
+  })
+
+  it("данные без исключённых: легенда без пояснения про зачёркивание", async () => {
+    server.use(
+      http.get("/api/vendors/:vendorId/where-allowed", () =>
+        HttpResponse.json({
+          standards: [
+            {
+              building_type_id: 1,
+              building_type_name: "Жилой дом",
+              position_count: 1,
+              positions: [
+                {
+                  position_id: 100,
+                  position_name: "Радиаторы отопления",
+                  chips: [
+                    {
+                      segment_id: 11,
+                      segment_name: "Делюкс",
+                      state: "allowed",
+                      release_label: null,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        })
+      )
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    expect(
+      await screen.findByText("показано текущее состояние стандартов")
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/зачёркнутый класс/)).not.toBeInTheDocument()
+  })
 })
 
 describe("VendorCardScreen — мутации", () => {

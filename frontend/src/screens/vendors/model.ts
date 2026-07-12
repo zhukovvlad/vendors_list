@@ -18,5 +18,28 @@ export function excludedTooltip(releaseLabel: string | null): string {
     : "Был в последнем релизе, исключён в текущем черновике"
 }
 
-export const WHERE_ALLOWED_LEGEND =
-  "зачёркнутый класс — был в последнем релизе, исключён · показано текущее состояние стандартов"
+/** Пометка пустого обратного индекса: вендор нигде не разрешён сейчас. */
+export const WHERE_ALLOWED_EMPTY = "нигде не разрешён"
+
+type ChipLike = { state: string }
+type PositionLike = { chips: ChipLike[] }
+type StandardLike = { positions: PositionLike[] }
+
+/** Есть ли в дереве хоть один исключённый (зачёркнутый) класс. */
+export function hasExcludedChips(standards: StandardLike[]): boolean {
+  return standards.some((s) =>
+    s.positions.some((p) => p.chips.some((c) => c.state === "excluded"))
+  )
+}
+
+/**
+ * Легенда под деревом «Где разрешён». Пояснение про зачёркивание добавляем
+ * ТОЛЬКО когда в выборке реально есть исключённый класс — иначе легенда
+ * объясняла бы то, чего на экране нет.
+ */
+export function whereAllowedLegend(hasExcluded: boolean): string {
+  const base = "показано текущее состояние стандартов"
+  return hasExcluded
+    ? `зачёркнутый класс — был в последнем релизе, исключён · ${base}`
+    : base
+}
