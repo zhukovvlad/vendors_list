@@ -73,15 +73,8 @@ describe("pluralPositions", () => {
 })
 
 describe("whereAllowedLegend", () => {
-  it("с исключёнными — добавляет пояснение про зачёркивание", () => {
-    const legend = whereAllowedLegend(true)
-    expect(legend).toContain("зачёркнутый класс")
-    expect(legend).toContain("показано текущее состояние стандартов")
-  })
-  it("без исключённых — только общая часть, без пояснения про зачёркивание", () => {
-    expect(whereAllowedLegend(false)).toBe(
-      "показано текущее состояние стандартов"
-    )
+  it("отдаёт базовый текст легенды", () => {
+    expect(whereAllowedLegend()).toBe("показано текущее состояние стандартов")
   })
 })
 

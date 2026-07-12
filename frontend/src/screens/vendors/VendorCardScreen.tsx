@@ -373,7 +373,7 @@ export function VendorCardScreen() {
               </p>
             ) : (
               <p className="mt-3 px-5 text-caption text-muted-foreground">
-                {whereAllowedLegend(false)}
+                {whereAllowedLegend()}
               </p>
             )}
           </>
