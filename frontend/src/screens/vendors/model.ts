@@ -58,9 +58,8 @@ type ChipLike = { state: string }
 type PositionLike = { chips: ChipLike[] }
 type StandardLike = { positions: PositionLike[] }
 
-type ChipState = { state: string }
-type CoveragePosition = { chips: ChipState[] }
-type CoverageStandard = { segment_count: number; positions: CoveragePosition[] }
+/** Стандарт для правила «все классы»: `PositionLike` + знаменатель `segment_count`. */
+type CoverageStandard = { segment_count: number; positions: PositionLike[] }
 
 /** Есть ли в дереве хоть один исключённый (зачёркнутый) класс. */
 export function hasExcludedChips(standards: StandardLike[]): boolean {
@@ -74,7 +73,7 @@ export function hasExcludedChips(standards: StandardLike[]): boolean {
  * исключённых. `excluded > 0` всегда даёт false — исключение не прячется за сводкой.
  */
 export function isAllClasses(
-  position: CoveragePosition,
+  position: PositionLike,
   segmentCount: number
 ): boolean {
   if (segmentCount <= 0) return false

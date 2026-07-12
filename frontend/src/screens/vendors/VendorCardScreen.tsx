@@ -368,8 +368,7 @@ export function VendorCardScreen() {
                 <span className="rounded-sm border border-dashed border-border-strong px-1.5 line-through">
                   класс
                 </span>
-                — был в последнем релизе, исключён · показано текущее состояние
-                стандартов
+                — был в последнем релизе, исключён · {whereAllowedLegend()}
               </p>
             ) : (
               <p className="mt-3 px-5 text-caption text-muted-foreground">
