@@ -83,9 +83,9 @@ describe("VendorCardScreen — Где разрешён", () => {
     )
   })
 
-  it("свёрнутый стандарт показывает счётчик позиций", async () => {
+  it("свёрнутый стандарт показывает счётчик позиций (склонение)", async () => {
     renderAt()
-    expect(await screen.findByText("1 позиций")).toBeInTheDocument()
+    expect(await screen.findByText("1 позиция")).toBeInTheDocument()
   })
 
   it("пустой вендор: заголовок + «нигде не разрешён», без легенды про зачёркивание", async () => {

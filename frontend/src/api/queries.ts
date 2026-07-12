@@ -126,6 +126,7 @@ export function useDashboard() {
   })
 }
 
+/** Карточка вендора по id (шапка). Бросает на ошибке API или пустом ответе. */
 export function useVendor(id: number) {
   return useQuery({
     queryKey: ["vendor", id],
@@ -140,6 +141,7 @@ export function useVendor(id: number) {
   })
 }
 
+/** Дерево «Где разрешён» по id. Бросает на ошибке API или пустом ответе. */
 export function useVendorWhereAllowed(id: number) {
   return useQuery({
     queryKey: ["vendor-where-allowed", id],
@@ -157,6 +159,11 @@ export function useVendorWhereAllowed(id: number) {
   })
 }
 
+/**
+ * Мутация тумблера соглашения (O1). На успехе инвалидирует карточку вендора,
+ * а также матрицу и дашборд — звезда вендора в матрице и счётчик соглашений на
+ * дашборде зависят от флага, иначе показывали бы устаревшее состояние.
+ */
 export function useToggleAgreement(id: number) {
   const qc = useQueryClient()
   return useMutation({
@@ -168,10 +175,15 @@ export function useToggleAgreement(id: number) {
       if (error) throw error
       return data
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["vendor", id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor", id] })
+      qc.invalidateQueries({ queryKey: ["matrix"] })
+      qc.invalidateQueries({ queryKey: ["dashboard"] })
+    },
   })
 }
 
+/** Мутация добавления alias вендора; на успехе инвалидирует карточку. */
 export function useAddAlias(id: number) {
   const qc = useQueryClient()
   return useMutation({
@@ -187,6 +199,7 @@ export function useAddAlias(id: number) {
   })
 }
 
+/** Мутация удаления alias вендора по id alias'а; на успехе инвалидирует карточку. */
 export function useRemoveAlias(id: number) {
   const qc = useQueryClient()
   return useMutation({

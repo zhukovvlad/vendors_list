@@ -24,6 +24,7 @@ import {
   excludedTooltip,
   hasExcludedChips,
   kindLabel,
+  pluralPositions,
   WHERE_ALLOWED_EMPTY,
   whereAllowedLegend,
 } from "./model"
@@ -198,7 +199,7 @@ export function VendorCardScreen() {
                       {s.building_type_name}
                     </span>
                     <span className="text-small text-muted-foreground">
-                      {s.position_count} позиций
+                      {`${s.position_count} ${pluralPositions(s.position_count)}`}
                     </span>
                   </AccordionTrigger>
                   <AccordionContent className="space-y-3">

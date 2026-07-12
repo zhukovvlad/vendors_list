@@ -4,6 +4,7 @@ import {
   excludedTooltip,
   hasExcludedChips,
   kindLabel,
+  pluralPositions,
   whereAllowedLegend,
 } from "./model"
 
@@ -46,6 +47,23 @@ describe("hasExcludedChips", () => {
   })
   it("false на пустом дереве", () => {
     expect(hasExcludedChips([])).toBe(false)
+  })
+})
+
+describe("pluralPositions", () => {
+  it("склоняет по числу", () => {
+    expect(pluralPositions(1)).toBe("позиция")
+    expect(pluralPositions(2)).toBe("позиции")
+    expect(pluralPositions(4)).toBe("позиции")
+    expect(pluralPositions(5)).toBe("позиций")
+    expect(pluralPositions(0)).toBe("позиций")
+    expect(pluralPositions(21)).toBe("позиция")
+  })
+  it("исключения 11–14 → «позиций»", () => {
+    expect(pluralPositions(11)).toBe("позиций")
+    expect(pluralPositions(12)).toBe("позиций")
+    expect(pluralPositions(14)).toBe("позиций")
+    expect(pluralPositions(111)).toBe("позиций")
   })
 })
 
