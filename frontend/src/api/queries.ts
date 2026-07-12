@@ -215,3 +215,26 @@ export function useRemoveAlias(id: number) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["vendor", id] }),
   })
 }
+
+/**
+ * Мутация инлайн-правки шапки (имя/примечание, partial). На успехе инвалидирует
+ * карточку, а также матрицу и дашборд (имя вендора видно в обоих).
+ */
+export function useUpdateVendorHeader(id: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (fields: { name?: string; note?: string }) => {
+      const { data, error } = await api.PATCH("/vendors/{vendor_id}", {
+        params: { path: { vendor_id: id } },
+        body: fields,
+      })
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor", id] })
+      qc.invalidateQueries({ queryKey: ["matrix"] })
+      qc.invalidateQueries({ queryKey: ["dashboard"] })
+    },
+  })
+}

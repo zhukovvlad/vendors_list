@@ -193,3 +193,67 @@ describe("VendorCardScreen — мутации", () => {
     await waitFor(() => expect(posted).toEqual({ alias: "NewAlias" }))
   })
 })
+
+describe("VendorCardScreen — инлайн-правка шапки", () => {
+  it("клик по имени → инпут в h1; Enter шлёт PATCH {name}", async () => {
+    let patched: unknown = null
+    server.use(
+      http.patch("/api/vendors/:vendorId", async ({ request }) => {
+        patched = await request.json()
+        return HttpResponse.json({ ...vendorFixture, name: "System Air 2" })
+      })
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(
+      screen.getByRole("button", { name: "Редактировать имя" })
+    )
+    const input = screen.getByRole("textbox", { name: "Редактировать имя" })
+    await userEvent.clear(input)
+    await userEvent.type(input, "System Air 2{Enter}")
+    await waitFor(() => expect(patched).toEqual({ name: "System Air 2" }))
+    // инпут имени живёт внутри h1 (пр.4)
+    expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument()
+  })
+
+  it("409 на имени → инлайн-ошибка, остаёмся в правке", async () => {
+    server.use(
+      http.patch("/api/vendors/:vendorId", () =>
+        HttpResponse.json({ detail: "Имя уже занято" }, { status: 409 })
+      )
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(
+      screen.getByRole("button", { name: "Редактировать имя" })
+    )
+    const input = screen.getByRole("textbox", { name: "Редактировать имя" })
+    await userEvent.clear(input)
+    await userEvent.type(input, "Занятое{Enter}")
+    expect(await screen.findByRole("alert")).toHaveTextContent("Имя уже занято")
+    expect(
+      screen.getByRole("textbox", { name: "Редактировать имя" })
+    ).toBeInTheDocument()
+  })
+
+  it("правка примечания шлёт PATCH {note}", async () => {
+    let patched: unknown = null
+    server.use(
+      http.patch("/api/vendors/:vendorId", async ({ request }) => {
+        patched = await request.json()
+        return HttpResponse.json({ ...vendorFixture, note: "заметка" })
+      })
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(
+      screen.getByRole("button", { name: "Редактировать примечание" })
+    )
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Редактировать примечание" }),
+      "заметка"
+    )
+    await userEvent.tab() // blur сохраняет
+    await waitFor(() => expect(patched).toEqual({ note: "заметка" }))
+  })
+})

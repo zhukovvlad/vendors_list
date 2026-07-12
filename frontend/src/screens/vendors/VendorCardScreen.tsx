@@ -6,6 +6,7 @@ import {
   useAddAlias,
   useRemoveAlias,
   useToggleAgreement,
+  useUpdateVendorHeader,
   useVendor,
   useVendorWhereAllowed,
 } from "@/api/queries"
@@ -31,6 +32,7 @@ import {
   WHERE_ALLOWED_EMPTY,
   whereAllowedLegend,
 } from "./model"
+import { InlineEditText } from "./InlineEditText"
 
 const CARD = "rounded-xl border border-border bg-card"
 
@@ -42,8 +44,10 @@ export function VendorCardScreen() {
   const toggleAgreement = useToggleAgreement(id)
   const addAlias = useAddAlias(id)
   const removeAlias = useRemoveAlias(id)
+  const updateHeader = useUpdateVendorHeader(id)
   const [aliasOpen, setAliasOpen] = useState(false)
   const [aliasDraft, setAliasDraft] = useState("")
+  const [nameError, setNameError] = useState<string | null>(null)
 
   if (isPending)
     return (
@@ -69,8 +73,26 @@ export function VendorCardScreen() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-h3 font-medium tracking-tight">
-                {data.name}
+              <h1 className="min-w-0 text-h3 font-medium tracking-tight">
+                <InlineEditText
+                  value={data.name}
+                  ariaLabel="Редактировать имя"
+                  onEditStart={() => setNameError(null)}
+                  error={nameError}
+                  displayClassName="max-w-full truncate text-left hover:opacity-80"
+                  inputClassName="w-full rounded-md border border-border bg-transparent px-1 text-h3 font-medium outline-none focus-visible:border-ring"
+                  onSubmit={async (next) => {
+                    setNameError(null)
+                    try {
+                      await updateHeader.mutateAsync({ name: next })
+                    } catch (e) {
+                      // Единственный ожидаемый отказ правки имени — 409 (занято);
+                      // прочее маловероятно, сообщение по сути не вводит в заблуждение.
+                      setNameError("Имя уже занято")
+                      throw e
+                    }
+                  }}
+                />
               </h1>
               <Badge variant="outline" className="rounded-full">
                 {kindLabel(data.kind)}
@@ -99,14 +121,19 @@ export function VendorCardScreen() {
                 "самостоятельный бренд"
               )}
             </div>
-            {data.note && (
-              <p
-                data-testid="vendor-note"
-                className="mt-1 text-small text-muted-foreground"
-              >
-                {data.note}
-              </p>
-            )}
+            <div className="mt-1 text-small text-muted-foreground">
+              <InlineEditText
+                value={data.note ?? ""}
+                ariaLabel="Редактировать примечание"
+                multiline
+                placeholder="+ примечание"
+                displayClassName="text-left hover:text-foreground"
+                inputClassName="w-full rounded-md border border-border bg-transparent px-1 py-0.5 text-small outline-none focus-visible:border-ring"
+                onSubmit={async (next) => {
+                  await updateHeader.mutateAsync({ note: next })
+                }}
+              />
+            </div>
           </div>
           <label className="flex shrink-0 items-center gap-2 text-small text-muted-foreground">
             Соглашение
