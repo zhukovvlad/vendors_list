@@ -157,6 +157,92 @@ describe("VendorCardScreen — Где разрешён", () => {
       await screen.findByText("1 стандарт · 1 позиция")
     ).toBeInTheDocument()
   })
+
+  it("полное покрытие без excluded → чип «все классы» вместо перечня", async () => {
+    server.use(
+      http.get("/api/vendors/:vendorId/where-allowed", () =>
+        HttpResponse.json({
+          standards: [
+            {
+              building_type_id: 1,
+              building_type_name: "Жилой дом",
+              position_count: 1,
+              segment_count: 2,
+              positions: [
+                {
+                  position_id: 100,
+                  position_name: "Радиаторы отопления",
+                  chips: [
+                    {
+                      segment_id: 11,
+                      segment_name: "Делюкс",
+                      state: "allowed",
+                      release_label: null,
+                    },
+                    {
+                      segment_id: 12,
+                      segment_name: "Эконом",
+                      state: "allowed",
+                      release_label: null,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        })
+      )
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(screen.getByText("Жилой дом"))
+    expect(await screen.findByText("все классы")).toBeInTheDocument()
+    expect(screen.queryByText("Делюкс")).not.toBeInTheDocument()
+  })
+
+  it("стандарт, где все позиции покрыты → сводка «· все классы» в заголовке", async () => {
+    server.use(
+      http.get("/api/vendors/:vendorId/where-allowed", () =>
+        HttpResponse.json({
+          standards: [
+            {
+              building_type_id: 1,
+              building_type_name: "Жилой дом",
+              position_count: 1,
+              segment_count: 1,
+              positions: [
+                {
+                  position_id: 100,
+                  position_name: "Радиаторы отопления",
+                  chips: [
+                    {
+                      segment_id: 11,
+                      segment_name: "Делюкс",
+                      state: "allowed",
+                      release_label: null,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        })
+      )
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    expect(
+      await screen.findByText(/1 позиция · все классы/)
+    ).toBeInTheDocument()
+  })
+
+  it("легенда без рамки: при excluded — образец-чип и пояснение", async () => {
+    renderAt() // дефолтная фикстура содержит excluded «Бизнес»
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    expect(
+      await screen.findByText(/был в последнем релизе, исключён/)
+    ).toBeInTheDocument()
+  })
 })
 
 describe("VendorCardScreen — мутации", () => {

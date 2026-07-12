@@ -73,6 +73,7 @@ export const whereAllowedFixture = {
       building_type_id: 1,
       building_type_name: "Жилой дом",
       position_count: 1,
+      segment_count: 2,
       positions: [
         {
           position_id: 100,
