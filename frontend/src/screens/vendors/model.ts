@@ -20,6 +20,30 @@ export function pluralPositions(n: number): string {
   return "позиций"
 }
 
+/** Русское склонение «стандарт» по числу. */
+export function pluralStandards(n: number): string {
+  const m10 = n % 10
+  const m100 = n % 100
+  if (m10 === 1 && m100 !== 11) return "стандарт"
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return "стандарта"
+  return "стандартов"
+}
+
+/** Русское склонение «вендор» по числу. */
+export function pluralVendors(n: number): string {
+  const m10 = n % 10
+  const m100 = n % 100
+  if (m10 === 1 && m100 !== 11) return "вендор"
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return "вендора"
+  return "вендоров"
+}
+
+/** Инициал для аватар-плитки: первая непробельная буква имени, заглавная. */
+export function avatarInitial(name: string): string {
+  const ch = name.trim().charAt(0)
+  return ch ? ch.toUpperCase() : "?"
+}
+
 /** Тултип зачёркнутого чипа: релиз идентифицируется label, не номером версии. */
 export function excludedTooltip(releaseLabel: string | null): string {
   return releaseLabel

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  avatarInitial,
   excludedTooltip,
   hasExcludedChips,
   kindLabel,
   pluralPositions,
+  pluralStandards,
+  pluralVendors,
   whereAllowedLegend,
 } from "./model"
 
@@ -77,5 +80,29 @@ describe("whereAllowedLegend", () => {
     expect(whereAllowedLegend(false)).toBe(
       "показано текущее состояние стандартов"
     )
+  })
+})
+
+describe("pluralStandards / pluralVendors", () => {
+  it("склоняет стандарт", () => {
+    expect(`${1} ${pluralStandards(1)}`).toBe("1 стандарт")
+    expect(`${3} ${pluralStandards(3)}`).toBe("3 стандарта")
+    expect(`${5} ${pluralStandards(5)}`).toBe("5 стандартов")
+    expect(`${11} ${pluralStandards(11)}`).toBe("11 стандартов")
+  })
+  it("склоняет вендор", () => {
+    expect(`${1} ${pluralVendors(1)}`).toBe("1 вендор")
+    expect(`${2} ${pluralVendors(2)}`).toBe("2 вендора")
+    expect(`${7} ${pluralVendors(7)}`).toBe("7 вендоров")
+  })
+})
+
+describe("avatarInitial", () => {
+  it("первая буква заглавная", () => {
+    expect(avatarInitial("system air")).toBe("S")
+    expect(avatarInitial("  ромашка")).toBe("Р")
+  })
+  it("пустое имя → ?", () => {
+    expect(avatarInitial("   ")).toBe("?")
   })
 })

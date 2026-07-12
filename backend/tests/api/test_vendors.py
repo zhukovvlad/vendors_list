@@ -175,3 +175,93 @@ async def test_alias_forbidden_for_viewer(client, as_viewer, db_conn) -> None:
     v = await f.make_vendor(db_conn, name="al-viewer")
     resp = await client.post(f"/vendors/{v}/aliases", json={"alias": "nope"})
     assert resp.status_code == 403
+
+
+async def _aliases(db_conn, vendor_id: int) -> list[str]:
+    return [
+        r["alias"]
+        for r in (
+            await db_conn.execute(
+                text("SELECT alias FROM vendor_alias WHERE vendor_id = :v ORDER BY alias"),
+                {"v": vendor_id},
+            )
+        ).mappings()
+    ]
+
+
+async def _name(db_conn, vendor_id: int) -> str:
+    return (
+        await db_conn.execute(text("SELECT name FROM vendor WHERE id = :v"), {"v": vendor_id})
+    ).scalar_one()
+
+
+async def _note(db_conn, vendor_id: int) -> str | None:
+    return (
+        await db_conn.execute(text("SELECT note FROM vendor WHERE id = :v"), {"v": vendor_id})
+    ).scalar_one()
+
+
+async def test_patch_name_moves_old_to_alias(client, as_admin, db_conn) -> None:
+    v = await f.make_vendor(db_conn, name="Старое имя")
+    resp = await client.patch(f"/vendors/{v}", json={"name": "Новое имя"})
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Новое имя"
+    assert await _name(db_conn, v) == "Новое имя"
+    assert "Старое имя" in await _aliases(db_conn, v)  # пр.1: старое имя → алиас
+
+
+async def test_patch_name_round_trip_alias_state(client, as_admin, db_conn) -> None:
+    v = await f.make_vendor(db_conn, name="A")
+    await client.patch(f"/vendors/{v}", json={"name": "B"})
+    await client.patch(f"/vendors/{v}", json={"name": "A"})
+    # пр.1: конечное состояние — name=A, алиасы ровно {B} (мусор не накопился)
+    assert await _name(db_conn, v) == "A"
+    assert await _aliases(db_conn, v) == ["B"]
+
+
+async def test_patch_name_duplicate_vendor_name_409(client, as_admin, db_conn) -> None:
+    a = await f.make_vendor(db_conn, name="Alpha")
+    await f.make_vendor(db_conn, name="Beta")
+    resp = await client.patch(f"/vendors/{a}", json={"name": "Beta"})
+    assert resp.status_code == 409
+
+
+async def test_patch_name_clash_with_other_alias_409(client, as_admin, db_conn) -> None:
+    owner = await f.make_vendor(db_conn, name="Owner")
+    await f.make_alias(db_conn, vendor_id=owner, alias="ЗанятыйАлиас")
+    v = await f.make_vendor(db_conn, name="Mover")
+    resp = await client.patch(f"/vendors/{v}", json={"name": "ЗанятыйАлиас"})
+    assert resp.status_code == 409  # пр.2: коллизия имени с чужим алиасом
+
+
+async def test_patch_note_set_and_clear(client, as_admin, db_conn) -> None:
+    v = await f.make_vendor(db_conn, name="note-vendor")
+    await client.patch(f"/vendors/{v}", json={"note": "заметка"})
+    assert await _note(db_conn, v) == "заметка"
+    resp = await client.patch(f"/vendors/{v}", json={"note": ""})  # пр.3: "" → NULL
+    assert resp.status_code == 200
+    assert await _note(db_conn, v) is None
+
+
+async def test_patch_note_absent_leaves_untouched(client, as_admin, db_conn) -> None:
+    v = await f.make_vendor(db_conn, name="keep-note")
+    await client.patch(f"/vendors/{v}", json={"note": "сохранить"})
+    await client.patch(f"/vendors/{v}", json={"name": "keep-note-2"})  # note не в теле
+    assert await _note(db_conn, v) == "сохранить"  # пр.3: поле не пришло → не трогаем
+
+
+async def test_patch_blank_name_422(client, as_admin, db_conn) -> None:
+    v = await f.make_vendor(db_conn, name="blank-name")
+    resp = await client.patch(f"/vendors/{v}", json={"name": "   "})
+    assert resp.status_code == 422
+
+
+async def test_patch_missing_vendor_404(client, as_admin) -> None:
+    resp = await client.patch("/vendors/999999", json={"name": "x"})
+    assert resp.status_code == 404
+
+
+async def test_patch_forbidden_for_viewer(client, as_viewer, db_conn) -> None:
+    v = await f.make_vendor(db_conn, name="patch-viewer")
+    resp = await client.patch(f"/vendors/{v}", json={"name": "nope"})
+    assert resp.status_code == 403

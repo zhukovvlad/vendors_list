@@ -54,7 +54,9 @@ describe("VendorCardScreen — шапка", () => {
     )
     renderAt()
     await screen.findByRole("heading", { level: 1 })
-    expect(screen.queryByTestId("vendor-note")).not.toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "Редактировать примечание" })
+    ).toHaveTextContent("+ примечание")
   })
 
   it("пилюля соглашения скрыта при starred=false", async () => {
@@ -66,6 +68,18 @@ describe("VendorCardScreen — шапка", () => {
     renderAt()
     await screen.findByRole("heading", { level: 1 })
     expect(screen.queryByText("соглашение")).not.toBeInTheDocument()
+  })
+
+  it("показывает аватар-инициал и пустое состояние алиасов", async () => {
+    server.use(
+      http.get("/api/vendors/:vendorId", () =>
+        HttpResponse.json({ ...vendorFixture, aliases: [] })
+      )
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    expect(screen.getByText("S")).toBeInTheDocument() // инициал аватара
+    expect(screen.getByText("вариантов пока нет")).toBeInTheDocument()
   })
 })
 
@@ -136,6 +150,13 @@ describe("VendorCardScreen — Где разрешён", () => {
     ).toBeInTheDocument()
     expect(screen.queryByText(/зачёркнутый класс/)).not.toBeInTheDocument()
   })
+
+  it("показывает сводку «N стандартов · M позиций»", async () => {
+    renderAt()
+    expect(
+      await screen.findByText("1 стандарт · 1 позиция")
+    ).toBeInTheDocument()
+  })
 })
 
 describe("VendorCardScreen — мутации", () => {
@@ -165,12 +186,100 @@ describe("VendorCardScreen — мутации", () => {
     )
     renderAt()
     await screen.findByRole("heading", { level: 1, name: /System Air/ })
-    await userEvent.click(screen.getByRole("button", { name: "+ вариант" }))
+    await userEvent.click(screen.getByRole("button", { name: "вариант" }))
     await userEvent.type(
       screen.getByPlaceholderText("вариант написания"),
       "NewAlias"
     )
     await userEvent.click(screen.getByRole("button", { name: "Добавить" }))
     await waitFor(() => expect(posted).toEqual({ alias: "NewAlias" }))
+  })
+})
+
+describe("VendorCardScreen — инлайн-правка шапки", () => {
+  it("клик по имени → инпут в h1; Enter шлёт PATCH {name}", async () => {
+    let patched: unknown = null
+    server.use(
+      http.patch("/api/vendors/:vendorId", async ({ request }) => {
+        patched = await request.json()
+        return HttpResponse.json({ ...vendorFixture, name: "System Air 2" })
+      })
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(
+      screen.getByRole("button", { name: "Редактировать имя" })
+    )
+    const input = screen.getByRole("textbox", { name: "Редактировать имя" })
+    await userEvent.clear(input)
+    await userEvent.type(input, "System Air 2{Enter}")
+    await waitFor(() => expect(patched).toEqual({ name: "System Air 2" }))
+    // инпут имени живёт внутри h1 (пр.4)
+    expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument()
+  })
+
+  it("409 на имени → инлайн-ошибка, остаёмся в правке", async () => {
+    server.use(
+      http.patch("/api/vendors/:vendorId", () =>
+        HttpResponse.json({ detail: "Имя уже занято" }, { status: 409 })
+      )
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(
+      screen.getByRole("button", { name: "Редактировать имя" })
+    )
+    const input = screen.getByRole("textbox", { name: "Редактировать имя" })
+    await userEvent.clear(input)
+    await userEvent.type(input, "Занятое{Enter}")
+    expect(await screen.findByRole("alert")).toHaveTextContent("Имя уже занято")
+    expect(
+      screen.getByRole("textbox", { name: "Редактировать имя" })
+    ).toBeInTheDocument()
+  })
+
+  it("правка примечания шлёт PATCH {note}", async () => {
+    let patched: unknown = null
+    server.use(
+      http.patch("/api/vendors/:vendorId", async ({ request }) => {
+        patched = await request.json()
+        return HttpResponse.json({ ...vendorFixture, note: "заметка" })
+      })
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(
+      screen.getByRole("button", { name: "Редактировать примечание" })
+    )
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Редактировать примечание" }),
+      "заметка"
+    )
+    await userEvent.tab() // blur сохраняет
+    await waitFor(() => expect(patched).toEqual({ note: "заметка" }))
+  })
+
+  it('очистка примечания шлёт PATCH {note: ""}', async () => {
+    let patched: unknown = null
+    server.use(
+      http.get("/api/vendors/:vendorId", () =>
+        HttpResponse.json({ ...vendorFixture, note: "старая заметка" })
+      ),
+      http.patch("/api/vendors/:vendorId", async ({ request }) => {
+        patched = await request.json()
+        return HttpResponse.json({ ...vendorFixture, note: null })
+      })
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(
+      screen.getByRole("button", { name: "Редактировать примечание" })
+    )
+    const box = screen.getByRole("textbox", {
+      name: "Редактировать примечание",
+    })
+    await userEvent.clear(box)
+    await userEvent.tab() // blur сохраняет (multiline)
+    await waitFor(() => expect(patched).toEqual({ note: "" }))
   })
 })

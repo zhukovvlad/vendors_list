@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 _from_row = ConfigDict(from_attributes=True)
 
@@ -282,3 +282,21 @@ class AgreementToggle(BaseModel):
 
 class AliasCreate(BaseModel):
     alias: str = Field(min_length=1)
+
+
+class VendorHeaderUpdate(BaseModel):
+    """Инлайн-правка шапки. Partial: в эндпоинте читаем model_dump(exclude_unset=True),
+    чтобы отличить «поле не пришло» от «note: null (очистить)»."""
+
+    name: str | None = None
+    note: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _name_not_blank(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Имя не может быть пустым")
+        return stripped
