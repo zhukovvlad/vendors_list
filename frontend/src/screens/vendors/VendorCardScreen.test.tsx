@@ -54,7 +54,9 @@ describe("VendorCardScreen — шапка", () => {
     )
     renderAt()
     await screen.findByRole("heading", { level: 1 })
-    expect(screen.queryByTestId("vendor-note")).not.toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "Редактировать примечание" })
+    ).toHaveTextContent("+ примечание")
   })
 
   it("пилюля соглашения скрыта при starred=false", async () => {
@@ -255,5 +257,29 @@ describe("VendorCardScreen — инлайн-правка шапки", () => {
     )
     await userEvent.tab() // blur сохраняет
     await waitFor(() => expect(patched).toEqual({ note: "заметка" }))
+  })
+
+  it('очистка примечания шлёт PATCH {note: ""}', async () => {
+    let patched: unknown = null
+    server.use(
+      http.get("/api/vendors/:vendorId", () =>
+        HttpResponse.json({ ...vendorFixture, note: "старая заметка" })
+      ),
+      http.patch("/api/vendors/:vendorId", async ({ request }) => {
+        patched = await request.json()
+        return HttpResponse.json({ ...vendorFixture, note: null })
+      })
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(
+      screen.getByRole("button", { name: "Редактировать примечание" })
+    )
+    const box = screen.getByRole("textbox", {
+      name: "Редактировать примечание",
+    })
+    await userEvent.clear(box)
+    await userEvent.tab() // blur сохраняет (multiline)
+    await waitFor(() => expect(patched).toEqual({ note: "" }))
   })
 })
