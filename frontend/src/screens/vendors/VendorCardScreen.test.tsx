@@ -67,6 +67,18 @@ describe("VendorCardScreen — шапка", () => {
     await screen.findByRole("heading", { level: 1 })
     expect(screen.queryByText("соглашение")).not.toBeInTheDocument()
   })
+
+  it("показывает аватар-инициал и пустое состояние алиасов", async () => {
+    server.use(
+      http.get("/api/vendors/:vendorId", () =>
+        HttpResponse.json({ ...vendorFixture, aliases: [] })
+      )
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    expect(screen.getByText("S")).toBeInTheDocument() // инициал аватара
+    expect(screen.getByText("вариантов пока нет")).toBeInTheDocument()
+  })
 })
 
 describe("VendorCardScreen — Где разрешён", () => {
@@ -136,6 +148,13 @@ describe("VendorCardScreen — Где разрешён", () => {
     ).toBeInTheDocument()
     expect(screen.queryByText(/зачёркнутый класс/)).not.toBeInTheDocument()
   })
+
+  it("показывает сводку «N стандартов · M позиций»", async () => {
+    renderAt()
+    expect(
+      await screen.findByText("1 стандарт · 1 позиция")
+    ).toBeInTheDocument()
+  })
 })
 
 describe("VendorCardScreen — мутации", () => {
@@ -165,7 +184,7 @@ describe("VendorCardScreen — мутации", () => {
     )
     renderAt()
     await screen.findByRole("heading", { level: 1, name: /System Air/ })
-    await userEvent.click(screen.getByRole("button", { name: "+ вариант" }))
+    await userEvent.click(screen.getByRole("button", { name: "вариант" }))
     await userEvent.type(
       screen.getByPlaceholderText("вариант написания"),
       "NewAlias"
