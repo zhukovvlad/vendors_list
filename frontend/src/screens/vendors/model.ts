@@ -58,10 +58,40 @@ type ChipLike = { state: string }
 type PositionLike = { chips: ChipLike[] }
 type StandardLike = { positions: PositionLike[] }
 
+type ChipState = { state: string }
+type CoveragePosition = { chips: ChipState[] }
+type CoverageStandard = { segment_count: number; positions: CoveragePosition[] }
+
 /** Есть ли в дереве хоть один исключённый (зачёркнутый) класс. */
 export function hasExcludedChips(standards: StandardLike[]): boolean {
   return standards.some((s) =>
     s.positions.some((p) => p.chips.some((c) => c.state === "excluded"))
+  )
+}
+
+/**
+ * Позиция покрыта «все классы»: вендор разрешён во ВСЕХ сегментах типа и нет
+ * исключённых. `excluded > 0` всегда даёт false — исключение не прячется за сводкой.
+ */
+export function isAllClasses(
+  position: CoveragePosition,
+  segmentCount: number
+): boolean {
+  if (segmentCount <= 0) return false
+  let allowed = 0
+  let excluded = 0
+  for (const c of position.chips) {
+    if (c.state === "allowed") allowed++
+    else if (c.state === "excluded") excluded++
+  }
+  return excluded === 0 && allowed === segmentCount
+}
+
+/** Стандарт целиком «все классы»: он непустой и все его позиции — «все классы». */
+export function standardAllClasses(standard: CoverageStandard): boolean {
+  return (
+    standard.positions.length > 0 &&
+    standard.positions.every((p) => isAllClasses(p, standard.segment_count))
   )
 }
 
