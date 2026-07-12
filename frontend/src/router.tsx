@@ -11,6 +11,7 @@ import { AppShell } from "@/components/layout/AppShell"
 import { DashboardScreen } from "@/screens/dashboard/DashboardScreen"
 import { DesignSystemShowcase } from "@/screens/DesignSystemShowcase"
 import { MatrixScreen } from "@/screens/matrix/MatrixScreen"
+import { VendorCardScreen } from "@/screens/vendors/VendorCardScreen"
 import { VendorsScreen } from "@/screens/vendors/VendorsScreen"
 
 const rootRoute = createRootRoute({ component: AppShell })
@@ -64,6 +65,14 @@ const vendorsRoute = createRoute({
   component: VendorsScreen,
 })
 
+// Экспортируем: экран берёт vendorCardRoute.useParams() (строгий резолв на том же
+// route-инстансе, что и дерево тестов).
+export const vendorCardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/vendors/$vendorId",
+  component: VendorCardScreen,
+})
+
 // Экспортируем routeTree: интеграционный тест (Task 9) строит memory-router из
 // ЭТОГО ЖЕ дерева, поэтому matrixRoute.useSearch()/useNavigate() в экране резолвятся
 // строго (те же route-инстансы), без нестрогих вариантов.
@@ -72,6 +81,7 @@ export const routeTree = rootRoute.addChildren([
   matrixRoute,
   designSystemRoute,
   vendorsRoute,
+  vendorCardRoute,
 ])
 
 export const router = createRouter({ routeTree })

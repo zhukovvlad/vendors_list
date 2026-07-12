@@ -53,6 +53,50 @@ export const dashboardFixture = {
   ],
 }
 
+export const vendorFixture = {
+  id: 5,
+  name: "System Air",
+  kind: "manufacturer",
+  note: null as string | null,
+  starred: true,
+  represents: null as { id: number; name: string } | null,
+  represented_count: 0,
+  aliases: [
+    { id: 1, alias: "System Air" },
+    { id: 2, alias: "SystemAir" },
+  ],
+}
+
+export const whereAllowedFixture = {
+  standards: [
+    {
+      building_type_id: 1,
+      building_type_name: "Жилой дом",
+      position_count: 1,
+      positions: [
+        {
+          position_id: 100,
+          position_name: "Радиаторы отопления",
+          chips: [
+            {
+              segment_id: 11,
+              segment_name: "Делюкс",
+              state: "allowed",
+              release_label: null,
+            },
+            {
+              segment_id: 14,
+              segment_name: "Бизнес",
+              state: "excluded",
+              release_label: "ред. 25.03.2026",
+            },
+          ],
+        },
+      ],
+    },
+  ],
+}
+
 export const handlers = [
   http.get(`${BASE}/meta/building-types`, () =>
     HttpResponse.json(buildingTypes)
@@ -95,5 +139,9 @@ export const handlers = [
       limit: 50,
       offset: 0,
     })
+  ),
+  http.get(`${BASE}/vendors/:vendorId`, () => HttpResponse.json(vendorFixture)),
+  http.get(`${BASE}/vendors/:vendorId/where-allowed`, () =>
+    HttpResponse.json(whereAllowedFixture)
   ),
 ]

@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Generic, TypeVar
+from typing import Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -225,3 +225,60 @@ class DashboardDraft(BaseModel):
 class Dashboard(BaseModel):
     summary: DashboardSummary
     drafts: list[DashboardDraft]
+
+
+# --- Карточка вендора --------------------------------------------------------
+class VendorAlias(BaseModel):
+    model_config = _from_row
+    id: int
+    alias: str
+
+
+class VendorRepresents(BaseModel):
+    model_config = _from_row
+    id: int
+    name: str
+
+
+class VendorCard(BaseModel):
+    id: int
+    name: str
+    kind: str
+    note: str | None
+    starred: bool
+    represents: VendorRepresents | None
+    represented_count: int
+    aliases: list[VendorAlias]
+
+
+class WhereAllowedChip(BaseModel):
+    segment_id: int
+    segment_name: str
+    state: Literal["allowed", "excluded"]
+    release_label: str | None     # для 'excluded' — тултип
+
+
+class WhereAllowedPosition(BaseModel):
+    position_id: int
+    position_name: str
+    chips: list[WhereAllowedChip]
+
+
+class WhereAllowedStandard(BaseModel):
+    building_type_id: int
+    building_type_name: str
+    position_count: int
+    positions: list[WhereAllowedPosition]
+
+
+class WhereAllowed(BaseModel):
+    standards: list[WhereAllowedStandard]
+
+
+# --- Мутации карточки вендора ------------------------------------------------
+class AgreementToggle(BaseModel):
+    active: bool
+
+
+class AliasCreate(BaseModel):
+    alias: str = Field(min_length=1)
