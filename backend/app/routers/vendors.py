@@ -19,6 +19,7 @@ from ..schemas import (
     AliasCreate,
     VendorAlias,
     VendorCard,
+    VendorHeaderUpdate,
     VendorRepresents,
     WhereAllowed,
     WhereAllowedChip,
@@ -29,8 +30,9 @@ from ..schemas import (
 router = APIRouter(prefix="/vendors", tags=["vendors"])
 
 
-@router.get("/{vendor_id}", response_model=VendorCard, dependencies=[Depends(require_user)])
-async def get_vendor(vendor_id: int, conn: AsyncConnection = Depends(read_conn)) -> VendorCard:
+async def _load_vendor_card(conn: AsyncConnection, vendor_id: int) -> VendorCard:
+    """Собирает VendorCard из готовых объектов БД (starred — из vendor_starred).
+    404, если вендора нет. Переиспользуется в GET и PATCH."""
     row = (
         await conn.execute(
             text("SELECT id, name, kind, represents_id, note FROM vendor WHERE id = :id"),
@@ -78,6 +80,11 @@ async def get_vendor(vendor_id: int, conn: AsyncConnection = Depends(read_conn))
         represented_count=represented_count,
         aliases=aliases,
     )
+
+
+@router.get("/{vendor_id}", response_model=VendorCard, dependencies=[Depends(require_user)])
+async def get_vendor(vendor_id: int, conn: AsyncConnection = Depends(read_conn)) -> VendorCard:
+    return await _load_vendor_card(conn, vendor_id)
 
 
 @router.get(
@@ -201,6 +208,72 @@ async def add_alias(
         # alias UNIQUE глобально → нарушение уникальности = 409
         raise HTTPException(status.HTTP_409_CONFLICT, "Такой вариант написания уже занят") from exc
     return VendorAlias.model_validate(dict(row))
+
+
+@router.patch("/{vendor_id}", response_model=VendorCard)
+async def update_vendor_header(
+    vendor_id: int,
+    body: VendorHeaderUpdate,
+    _admin: CurrentUser = Depends(require_admin),
+    conn: AsyncConnection = Depends(tx),
+) -> VendorCard:
+    """Инлайн-правка шапки (имя и/или примечание, partial).
+
+    Смена имени нормализует справочник: старое написание уходит в алиасы (пр.1,
+    ON CONFLICT — идемпотентно для A→B→A). Коллизия нового имени с чужим именем
+    (UNIQUE → IntegrityError) или чужим алиасом (пр.2, явная проверка) → 409.
+    note: "" → NULL (пр.3); поле не в теле → не трогаем.
+    """
+    row = (
+        await conn.execute(text("SELECT name FROM vendor WHERE id = :id"), {"id": vendor_id})
+    ).mappings().one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Вендор не найден")
+    data = body.model_dump(exclude_unset=True)
+
+    if "name" in data:
+        new_name = data["name"]  # уже стрипнуто валидатором
+        old_name = row["name"]
+        if new_name != old_name:
+            clash = (
+                await conn.execute(
+                    text("SELECT 1 FROM vendor_alias WHERE alias = :n AND vendor_id <> :id"),
+                    {"n": new_name, "id": vendor_id},
+                )
+            ).scalar_one_or_none()
+            if clash is not None:
+                raise HTTPException(status.HTTP_409_CONFLICT, "Имя уже занято")
+            # снять дубль «новое имя == собственный алиас»
+            await conn.execute(
+                text("DELETE FROM vendor_alias WHERE vendor_id = :id AND alias = :n"),
+                {"id": vendor_id, "n": new_name},
+            )
+            try:
+                await conn.execute(
+                    text("UPDATE vendor SET name = :n WHERE id = :id"),
+                    {"n": new_name, "id": vendor_id},
+                )
+            except IntegrityError as exc:
+                raise HTTPException(status.HTTP_409_CONFLICT, "Имя уже занято") from exc
+            # старое имя → алиас (идемпотентно)
+            await conn.execute(
+                text(
+                    "INSERT INTO vendor_alias (vendor_id, alias) VALUES (:id, :old) "
+                    "ON CONFLICT (alias) DO NOTHING"
+                ),
+                {"id": vendor_id, "old": old_name},
+            )
+
+    if "note" in data:
+        raw = data["note"]
+        note = raw.strip() if raw else None
+        note = note or None
+        await conn.execute(
+            text("UPDATE vendor SET note = :note WHERE id = :id"),
+            {"note": note, "id": vendor_id},
+        )
+
+    return await _load_vendor_card(conn, vendor_id)
 
 
 @router.delete("/{vendor_id}/aliases/{alias_id}", status_code=status.HTTP_204_NO_CONTENT)
