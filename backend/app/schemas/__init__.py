@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Generic, TypeVar
+from typing import Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -254,7 +254,7 @@ class VendorCard(BaseModel):
 class WhereAllowedChip(BaseModel):
     segment_id: int
     segment_name: str
-    state: str                    # 'allowed' | 'excluded'
+    state: Literal["allowed", "excluded"]
     release_label: str | None     # для 'excluded' — тултип
 
 

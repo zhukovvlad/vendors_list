@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from ..auth import CurrentUser, require_admin, require_user
@@ -88,6 +88,7 @@ async def get_vendor(vendor_id: int, conn: AsyncConnection = Depends(read_conn))
 async def get_where_allowed(
     vendor_id: int, conn: AsyncConnection = Depends(read_conn)
 ) -> WhereAllowed:
+    await _ensure_vendor(conn, vendor_id)
     rows = (
         await conn.execute(
             text("SELECT * FROM vendor_where_allowed(:v)"), {"v": vendor_id}
@@ -196,7 +197,7 @@ async def add_alias(
                 {"v": vendor_id, "a": body.alias},
             )
         ).mappings().one()
-    except DBAPIError as exc:
+    except IntegrityError as exc:
         # alias UNIQUE глобально → нарушение уникальности = 409
         raise HTTPException(status.HTTP_409_CONFLICT, "Такой вариант написания уже занят") from exc
     return VendorAlias.model_validate(dict(row))

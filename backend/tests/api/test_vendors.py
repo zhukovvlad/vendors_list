@@ -59,6 +59,11 @@ async def test_where_allowed_tree(client, as_viewer, db_conn) -> None:
     assert chips["Класс-2"]["release_label"] == "ред. API"
 
 
+async def test_where_allowed_404(client, as_viewer) -> None:
+    resp = await client.get("/vendors/999999/where-allowed")
+    assert resp.status_code == 404
+
+
 async def _agreement_log_count(db_conn, vendor_id: int) -> int:
     return (
         await db_conn.execute(
