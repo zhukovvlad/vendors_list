@@ -268,6 +268,7 @@ class WhereAllowedStandard(BaseModel):
     building_type_id: int
     building_type_name: str
     position_count: int
+    segment_count: int      # всего классов (сегментов) у типа — знаменатель «все классы»
     positions: list[WhereAllowedPosition]
 
 
