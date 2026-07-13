@@ -199,6 +199,20 @@ export function VendorCardScreen() {
     }
   }
 
+  /** Закрывает диалог только при успехе; на отказе (409/сеть) — тост и диалог
+   * остаётся открытым, чтобы можно было повторить попытку. */
+  async function confirmAddStandard(body: {
+    position_id: number
+    segment_ids: number[]
+  }) {
+    try {
+      await addListings.mutateAsync(body)
+      setAddStandardOpen(false)
+    } catch {
+      toast("Не удалось добавить стандарт — попробуйте ещё раз")
+    }
+  }
+
   if (isPending)
     return (
       <div className="py-16 text-center text-muted-foreground">Загрузка…</div>
@@ -742,15 +756,11 @@ export function VendorCardScreen() {
         )}
       </section>
       <AddStandardDialog
-        key={String(addStandardOpen)}
         open={addStandardOpen}
         onOpenChange={setAddStandardOpen}
         present={presentStandards}
         pending={addListings.isPending}
-        onAdd={(body) => {
-          addListings.mutate(body)
-          setAddStandardOpen(false)
-        }}
+        onAdd={confirmAddStandard}
       />
       <ExcludeDialog
         open={excludeDialog !== null}

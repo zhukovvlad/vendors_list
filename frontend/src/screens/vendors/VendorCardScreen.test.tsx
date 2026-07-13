@@ -4,7 +4,7 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { http, HttpResponse } from "msw"
 import { describe, expect, it } from "vitest"
@@ -523,5 +523,65 @@ describe("VendorCardScreen — + стандарт", () => {
     expect(await screen.findByRole("dialog")).toBeInTheDocument()
     // «Жилой дом» присутствует (id=1 в where-allowed) → помечен «уже присутствует»
     expect(await screen.findByText(/уже присутствует/)).toBeInTheDocument()
+  })
+
+  /** Проводит диалог через все 3 шага: стандарт (ещё не присутствующий id=2) →
+   * позиция → класс. Оставляет клик по «Добавить» вызывающему тесту, чтобы тот
+   * мог выбрать между success- и error-обработчиком POST. */
+  async function fillAddStandardSteps() {
+    await enterEditMode()
+    await userEvent.click(screen.getByRole("button", { name: "+ стандарт" }))
+    const dialog = await screen.findByRole("dialog")
+    await userEvent.click(
+      within(dialog).getByRole("radio", { name: /Офисные здания/ })
+    )
+    await userEvent.click(
+      await within(dialog).findByText("Радиаторы отопления")
+    )
+    await userEvent.click(
+      within(dialog).getByRole("checkbox", { name: "Бизнес" })
+    )
+    return dialog
+  }
+
+  it("сабмит: POST уходит с ожидаемым телом, диалог закрывается", async () => {
+    let posted: unknown = null
+    server.use(
+      http.post("/api/vendors/:vendorId/listings", async ({ request }) => {
+        posted = await request.json()
+        return new HttpResponse(null, { status: 204 })
+      })
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    const dialog = await fillAddStandardSteps()
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Добавить" })
+    )
+    await waitFor(() =>
+      expect(posted).toEqual({ position_id: 100, segment_ids: [11] })
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    )
+  })
+
+  it("409 на добавлении → диалог остаётся открытым (не глотает отказ)", async () => {
+    let handled = false
+    server.use(
+      http.post("/api/vendors/:vendorId/listings", () => {
+        handled = true
+        return HttpResponse.json({ detail: "конфликт" }, { status: 409 })
+      })
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    const dialog = await fillAddStandardSteps()
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Добавить" })
+    )
+    // мутация отработала (отказ), но диалог остаётся смонтированным и открытым
+    await waitFor(() => expect(handled).toBe(true))
+    expect(screen.getByRole("dialog")).toBeInTheDocument()
   })
 })

@@ -36,10 +36,12 @@ interface AddStandardDialogProps {
  * с серверным поиском через `useMetaPositions`) → классы (Checkbox по `useSegments`;
  * одноклассовый тип типа объекта — единственный чекбокс всегда отмечен).
  *
- * Состояние шагов не сбрасывается императивно: родитель обязан менять `key` на
- * каждое открытие (см. `VendorCardScreen`), это даёт свежий useState без setState
- * в эффекте (react-hooks/set-state-in-effect) и работает независимо от того, кто
- * закрыл диалог — Cancel, Esc/оверлей или `onAdd` родителя.
+ * Экземпляр Dialog стабилен (без `key`-ремаунта — иначе ломается exit-анимация
+ * Radix). Шаговое состояние сбрасывается в `handleOpenChange` — обработчике
+ * события закрытия (Cancel/Esc/оверлей), не в эффекте (react-hooks/set-state-in-effect
+ * этого не запрещает для обработчиков событий). Родительский `onOpenChange`
+ * при этом всё равно вызывается — родитель остаётся источником истины для `open`
+ * (успешный `onAdd` закрывает диалог сам, минуя этот обработчик).
  */
 export function AddStandardDialog({
   open,
@@ -81,8 +83,20 @@ export function AddStandardDialog({
     onAdd({ position_id: positionId, segment_ids: finalSegmentIds })
   }
 
+  /** Сброс шагового состояния на закрытие (Cancel/Esc/оверлей); родитель уведомляется всегда. */
+  function handleOpenChange(next: boolean) {
+    if (!next) {
+      setBuildingTypeId(null)
+      setQ("")
+      setPositionId(null)
+      setPositionName("")
+      setSegmentIds([])
+    }
+    onOpenChange(next)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>+ стандарт</DialogTitle>
@@ -176,7 +190,11 @@ export function AddStandardDialog({
               <div className="mb-1.5 text-caption text-muted-foreground uppercase">
                 Классы
               </div>
-              {singleSegment ? (
+              {segments.isPending ? (
+                <div className="text-small text-muted-foreground">
+                  Загрузка…
+                </div>
+              ) : singleSegment ? (
                 <div className="flex items-center gap-2 text-small">
                   <Checkbox checked disabled />
                   {singleSegment.name}
@@ -211,7 +229,7 @@ export function AddStandardDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Отмена
           </Button>
           <Button disabled={!canSubmit} onClick={handleAdd}>
