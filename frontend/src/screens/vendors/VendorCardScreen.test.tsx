@@ -644,3 +644,112 @@ describe("VendorCardScreen — + стандарт", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument()
   })
 })
+
+describe("VendorCardScreen — клиппинг edit + полоса + типографика v4", () => {
+  it("edit-режим: контент секции без overflow-hidden и анимации (не клиппится)", async () => {
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode()
+    // в edit секции раскрыты принудительно → контент смонтирован
+    const contents = document.querySelectorAll(
+      '[data-slot="accordion-content"]'
+    )
+    expect(contents.length).toBeGreaterThan(0)
+    contents.forEach((el) => {
+      expect(el.className).not.toContain("overflow-hidden")
+      expect(el.className).not.toContain("animate-accordion")
+    })
+  })
+
+  it("view-режим: раскрытая секция сохраняет overflow-hidden + анимацию", async () => {
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(screen.getByRole("button", { name: /Жилой дом/ }))
+    await screen.findByText("Делюкс") // дождаться монтирования контента
+    const content = document.querySelector('[data-slot="accordion-content"]')
+    expect(content).not.toBeNull()
+    expect(content!.className).toContain("overflow-hidden")
+    expect(content!.className).toContain("animate-accordion")
+  })
+
+  it("edit-режим: «+ стандарт» отрендерен выше легенды", async () => {
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode()
+    const plus = screen.getByRole("button", { name: "+ стандарт" })
+    const legend = screen.getByText(/исключён, войдёт в следующий релиз/)
+    // +стандарт предшествует легенде в порядке документа
+    expect(
+      plus.compareDocumentPosition(legend) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+  })
+
+  it("edit-режим: полоса стандарта без счётчика позиций", async () => {
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    // view: счётчик в полосе присутствует
+    expect(
+      screen.getByRole("button", { name: /^Жилой дом/ })
+    ).toHaveTextContent(/позици/i)
+    await enterEditMode()
+    // edit: полоса чистая (имя-триггер без счётчика; `^` отсекает кебаб)
+    expect(
+      screen.getByRole("button", { name: /^Жилой дом/ })
+    ).not.toHaveTextContent(/позици/i)
+  })
+
+  it("edit-режим: сводка «все классы» не рендерится в полосе", async () => {
+    server.use(
+      http.get("/api/vendors/:vendorId/where-allowed", () =>
+        HttpResponse.json({
+          standards: [
+            {
+              building_type_id: 1,
+              building_type_name: "Жилой дом",
+              position_count: 1,
+              segment_count: 1,
+              positions: [
+                {
+                  position_id: 100,
+                  position_name: "Радиаторы отопления",
+                  chips: [
+                    {
+                      segment_id: 11,
+                      segment_name: "Делюкс",
+                      state: "allowed",
+                      release_label: null,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        })
+      )
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    // view: сводка «все классы» в полосе видна
+    expect(
+      await screen.findByText(/1 позиция · все классы/)
+    ).toBeInTheDocument()
+    await enterEditMode()
+    expect(
+      screen.getByRole("button", { name: /^Жилой дом/ })
+    ).not.toHaveTextContent(/все классы/i)
+  })
+
+  it("v4: полоса — caption/uppercase; имя позиции — 15px; размеры разные", async () => {
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(screen.getByRole("button", { name: /Жилой дом/ }))
+    const stripName = screen.getByText("Жилой дом")
+    const posName = await screen.findByText("Радиаторы отопления")
+    expect(stripName.className).toContain("uppercase")
+    expect(stripName.className).toContain("text-caption")
+    expect(posName.className).toContain("text-[15px]")
+    // разные размерные классы (не оба 14px text-small, как в v3)
+    expect(stripName.className).not.toContain("text-[15px]")
+    expect(posName.className).not.toContain("text-caption")
+  })
+})

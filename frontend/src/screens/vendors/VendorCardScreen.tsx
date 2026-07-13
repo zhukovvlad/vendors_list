@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { Link } from "@tanstack/react-router"
 import { Accordion as AccordionPrimitive } from "radix-ui"
 import { toast } from "sonner"
@@ -29,11 +29,7 @@ import {
   useVendor,
   useVendorWhereAllowed,
 } from "@/api/queries"
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-} from "@/components/ui/accordion"
+import { Accordion, AccordionItem } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -49,6 +45,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
+import { cn } from "@/lib/utils"
 import { vendorCardRoute } from "@/router"
 
 import { AddStandardDialog } from "./AddStandardDialog"
@@ -86,6 +83,47 @@ type ExcludeDialogState = {
   title: string
   scale: { positions: number; classes: number }
   body: ExcludeBody
+}
+
+/**
+ * Контент секции «Где разрешён». Аналог DS `AccordionContent`, но с оглядкой на
+ * edit-режим (вариант B фикса клиппинга): в правке секции раскрыты принудительно
+ * и контент РАСТЁТ (чипы получают ×, появляются ⊖/«+ класс»). Radix замеряет
+ * `--radix-accordion-content-height` в момент открытия — до дорастания, — и
+ * `overflow-hidden` режет хвост. Поэтому в edit рендерим без анимации/overflow/
+ * фикс-высоты (height auto, overflow visible). В view контент статичен — анимация
+ * и клип остаются как в DS. DS-примитив не форкаем (golden-rule: правка на уровне
+ * экрана, триггер здесь тоже кастомный).
+ */
+function WhereAllowedContent({
+  editMode,
+  className,
+  children,
+}: {
+  editMode: boolean
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <AccordionPrimitive.Content
+      data-slot="accordion-content"
+      className={cn(
+        "text-sm",
+        !editMode &&
+          "overflow-hidden data-open:animate-accordion-down data-closed:animate-accordion-up"
+      )}
+    >
+      <div
+        className={cn(
+          "pt-0 pb-2.5",
+          !editMode && "h-(--radix-accordion-content-height)",
+          className
+        )}
+      >
+        {children}
+      </div>
+    </AccordionPrimitive.Content>
+  )
 }
 
 /**
@@ -240,6 +278,24 @@ export function VendorCardScreen() {
   const allStandardsPresent =
     (buildingTypes.data?.length ?? 0) > 0 &&
     presentStandards.size >= (buildingTypes.data?.length ?? 0)
+
+  // «+ стандарт» — действие блока; по макету идёт ВЫШЕ легенды (легенда закрывает
+  // блок последней). Один элемент переиспользуется в пустом и непустом состоянии.
+  const plusStandardEl = (
+    <div className="mt-3 px-5">
+      <button
+        type="button"
+        disabled={allStandardsPresent}
+        title={
+          allStandardsPresent ? "вендор есть во всех стандартах" : undefined
+        }
+        onClick={() => setAddStandardOpen(true)}
+        className="inline-flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border-strong px-2.5 py-1.5 text-small text-primary disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        + стандарт
+      </button>
+    </div>
+  )
 
   return (
     <div className="mx-auto flex max-w-[720px] flex-col gap-3 py-6">
@@ -519,9 +575,12 @@ export function VendorCardScreen() {
             Не удалось загрузить
           </div>
         ) : standards.length === 0 ? (
-          <div className="mt-2 px-5 text-small text-muted-foreground">
-            {WHERE_ALLOWED_EMPTY}
-          </div>
+          <>
+            <div className="mt-2 px-5 text-small text-muted-foreground">
+              {WHERE_ALLOWED_EMPTY}
+            </div>
+            {editMode && plusStandardEl}
+          </>
         ) : (
           <>
             <Accordion
@@ -548,12 +607,16 @@ export function VendorCardScreen() {
                           aria-hidden
                           className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90 group-data-[state=open]:text-primary"
                         />
-                        <span className="flex-1 text-small font-medium tracking-tight text-muted-foreground group-data-[state=open]:text-foreground">
+                        <span className="flex-1 text-caption font-medium tracking-[0.09em] text-muted-foreground uppercase group-data-[state=open]:text-foreground">
                           {s.building_type_name}
                         </span>
-                        <span className="text-caption text-muted-foreground uppercase">
-                          {summary}
-                        </span>
+                        {/* Счётчик/сводка — атрибут просмотра: в edit полоса растёт
+                            в чипы, а сводка полуправдива и конкурирует с кебабом. */}
+                        {!editMode && (
+                          <span className="text-caption text-muted-foreground">
+                            {summary}
+                          </span>
+                        )}
                       </AccordionPrimitive.Trigger>
                       {editMode && (
                         <DropdownMenu>
@@ -586,7 +649,10 @@ export function VendorCardScreen() {
                         </DropdownMenu>
                       )}
                     </AccordionPrimitive.Header>
-                    <AccordionContent className="mr-5 ml-8 border-l border-border pl-4">
+                    <WhereAllowedContent
+                      editMode={editMode}
+                      className="mr-5 ml-8 border-l border-border pl-4"
+                    >
                       <div className="divide-y divide-border/60">
                         {s.positions.map((p) => {
                           const presentSegmentIds = new Set(
@@ -597,7 +663,7 @@ export function VendorCardScreen() {
                               key={p.position_id}
                               className="flex flex-wrap items-center gap-x-2 gap-y-1.5 py-2"
                             >
-                              <span className="flex-1 text-small text-foreground">
+                              <span className="flex-1 text-[15px] tracking-tight text-foreground">
                                 {(() => {
                                   const { head, qualifier } = splitQualifier(
                                     p.position_name
@@ -606,7 +672,7 @@ export function VendorCardScreen() {
                                     <>
                                       {head}
                                       {qualifier && (
-                                        <span className="text-muted-foreground">
+                                        <span className="text-[13px] text-muted-foreground">
                                           {" "}
                                           ({qualifier})
                                         </span>
@@ -744,11 +810,12 @@ export function VendorCardScreen() {
                           )
                         })}
                       </div>
-                    </AccordionContent>
+                    </WhereAllowedContent>
                   </AccordionItem>
                 )
               })}
             </Accordion>
+            {editMode && plusStandardEl}
             {hasExcludedChips(standards) ? (
               <p className="mt-3 flex items-center gap-1.5 px-5 text-caption text-muted-foreground">
                 <span className="rounded-sm border border-dashed border-border-strong px-1.5 line-through">
@@ -762,23 +829,6 @@ export function VendorCardScreen() {
               </p>
             )}
           </>
-        )}
-        {editMode && (
-          <div className="mt-3 px-5">
-            <button
-              type="button"
-              disabled={allStandardsPresent}
-              title={
-                allStandardsPresent
-                  ? "вендор есть во всех стандартах"
-                  : undefined
-              }
-              onClick={() => setAddStandardOpen(true)}
-              className="inline-flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border-strong px-2.5 py-1.5 text-small text-primary disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              + стандарт
-            </button>
-          </div>
         )}
       </section>
       <AddStandardDialog
