@@ -334,7 +334,7 @@ class ListingExclude(BaseModel):
     building_type_id: int | None = None
 
     @model_validator(mode="after")
-    def _require_scope_fields(self) -> "ListingExclude":
+    def _require_scope_fields(self) -> ListingExclude:
         if self.scope == "class" and (self.position_id is None or self.segment_id is None):
             raise ValueError("scope=class требует position_id и segment_id")
         if self.scope == "position" and (self.position_id is None or self.building_type_id is None):

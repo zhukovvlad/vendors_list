@@ -26,7 +26,9 @@ async def test_meta_positions_scoped_to_building_type(client, as_viewer, db_conn
     seg2 = await f.make_segment(db_conn, building_type_id=bt2, name="Кл-1-bt2", sort_order=1)
     pos_bt2 = await f.make_position(db_conn, category_id=cat, name="Позиция-только-bt2")
     v2 = await f.make_vendor(db_conn, name="mp-v2")
-    await f.make_listing(db_conn, position_id=pos_bt2, segment_id=seg2, vendor_id=v2, status="allowed")
+    await f.make_listing(
+        db_conn, position_id=pos_bt2, segment_id=seg2, vendor_id=v2, status="allowed"
+    )
 
     resp = await client.get(f"/meta/positions?building_type_id={bt}")
     assert resp.status_code == 200

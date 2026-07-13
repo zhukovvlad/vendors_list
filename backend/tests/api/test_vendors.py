@@ -326,7 +326,9 @@ async def test_add_listings_undelete_branch_no_history(client, as_admin, db_conn
     cat = await f.make_category(db_conn, name="add-und-cat")
     pos = await f.make_position(db_conn, category_id=cat, name="add-und-pos")
     v = await f.make_vendor(db_conn, name="add-und-v")
-    lid = await f.make_listing(db_conn, position_id=pos, segment_id=s1, vendor_id=v, status="allowed")
+    lid = await f.make_listing(
+        db_conn, position_id=pos, segment_id=s1, vendor_id=v, status="allowed"
+    )
     await db_conn.execute(
         text("UPDATE listing SET deleted_at = now() WHERE id = :id"), {"id": lid}
     )
@@ -338,7 +340,10 @@ async def test_add_listings_undelete_branch_no_history(client, as_admin, db_conn
     # та же строка ожила — не наплодили дубль-историю
     total = (
         await db_conn.execute(
-            text("SELECT count(*) FROM listing WHERE position_id = :p AND segment_id = :s AND vendor_id = :v"),
+            text(
+                "SELECT count(*) FROM listing "
+                "WHERE position_id = :p AND segment_id = :s AND vendor_id = :v"
+            ),
             {"p": pos, "s": s1, "v": v},
         )
     ).scalar_one()
@@ -354,7 +359,12 @@ async def test_add_listings_meta_row_conflict_409(client, as_admin, db_conn) -> 
     v = await f.make_vendor(db_conn, name="add-409-v")
     # живая мета-строка (requirement) в ячейке → добавить вендора нельзя
     await f.make_listing(
-        db_conn, position_id=pos, segment_id=s1, vendor_id=None, status="requirement", spec_text="Россия"
+        db_conn,
+        position_id=pos,
+        segment_id=s1,
+        vendor_id=None,
+        status="requirement",
+        spec_text="Россия",
     )
 
     resp = await client.post(
@@ -457,7 +467,9 @@ async def test_restore_undelete_branch(client, as_admin, db_conn) -> None:
     cat = await f.make_category(db_conn, name="res-und-cat")
     pos = await f.make_position(db_conn, category_id=cat, name="res-und-pos")
     v = await f.make_vendor(db_conn, name="res-und-v")
-    lid = await f.make_listing(db_conn, position_id=pos, segment_id=s1, vendor_id=v, status="allowed")
+    lid = await f.make_listing(
+        db_conn, position_id=pos, segment_id=s1, vendor_id=v, status="allowed"
+    )
     await db_conn.execute(text("UPDATE listing SET deleted_at = now() WHERE id = :id"), {"id": lid})
 
     resp = await client.post(
@@ -493,7 +505,12 @@ async def test_restore_meta_row_conflict_409(client, as_admin, db_conn) -> None:
     v = await f.make_vendor(db_conn, name="res-409-v")
     # живая мета-строка (requirement) в ячейке → восстановить вендора нельзя
     await f.make_listing(
-        db_conn, position_id=pos, segment_id=s1, vendor_id=None, status="requirement", spec_text="Россия"
+        db_conn,
+        position_id=pos,
+        segment_id=s1,
+        vendor_id=None,
+        status="requirement",
+        spec_text="Россия",
     )
 
     resp = await client.post(
@@ -518,8 +535,12 @@ async def test_patch_kind_invalid_422(client, as_admin, db_conn) -> None:
 async def test_listing_mutations_rbac_viewer_403(client, as_viewer, db_conn) -> None:
     v = await f.make_vendor(db_conn, name="rbac-v")
     r1 = await client.post(f"/vendors/{v}/listings", json={"position_id": 1, "segment_ids": [1]})
-    r2 = await client.post(f"/vendors/{v}/listings/exclude", json={"scope": "standard", "building_type_id": 1})
-    r3 = await client.post(f"/vendors/{v}/listings/restore", json={"position_id": 1, "segment_id": 1})
+    r2 = await client.post(
+        f"/vendors/{v}/listings/exclude", json={"scope": "standard", "building_type_id": 1}
+    )
+    r3 = await client.post(
+        f"/vendors/{v}/listings/restore", json={"position_id": 1, "segment_id": 1}
+    )
     assert r1.status_code == 403
     assert r2.status_code == 403
     assert r3.status_code == 403

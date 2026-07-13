@@ -220,7 +220,8 @@ async def _add_one_class(
     except DBAPIError as exc:
         if _is_cell_chk(exc):
             raise HTTPException(
-                status.HTTP_409_CONFLICT, "Ячейка содержит требование/прочерк — сначала уберите мета-строку"
+                status.HTTP_409_CONFLICT,
+                "Ячейка содержит требование/прочерк — сначала уберите мета-строку",
             ) from exc
         raise
 
