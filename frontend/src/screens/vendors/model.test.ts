@@ -2,13 +2,17 @@ import { describe, expect, it } from "vitest"
 
 import {
   avatarInitial,
+  excludeScaleForPosition,
+  excludeScaleForStandard,
   excludedTooltip,
   hasExcludedChips,
   isAllClasses,
   kindLabel,
+  pluralClasses,
   pluralPositions,
   pluralStandards,
   pluralVendors,
+  splitQualifier,
   standardAllClasses,
   whereAllowedLegend,
 } from "./model"
@@ -30,7 +34,7 @@ describe("excludedTooltip", () => {
   })
   it("без label — обобщённо", () => {
     expect(excludedTooltip(null)).toBe(
-      "Был в последнем релизе, исключён в текущем черновике"
+      "Был в последнем релизе, исключён — войдёт в следующий релиз"
     )
   })
 })
@@ -74,7 +78,9 @@ describe("pluralPositions", () => {
 
 describe("whereAllowedLegend", () => {
   it("отдаёт базовый текст легенды", () => {
-    expect(whereAllowedLegend()).toBe("показано текущее состояние стандартов")
+    expect(whereAllowedLegend()).toBe(
+      "исключения войдут в следующий релиз; текущие релизы не затрагиваются"
+    )
   })
 })
 
@@ -136,5 +142,64 @@ describe("isAllClasses / standardAllClasses", () => {
       positions: [pos(["allowed", "allowed"]), pos(["allowed"])],
     }
     expect(standardAllClasses(std)).toBe(false)
+  })
+})
+
+describe("splitQualifier", () => {
+  it("без скобки → qualifier null", () => {
+    expect(splitQualifier("Радиаторы")).toEqual({
+      head: "Радиаторы",
+      qualifier: null,
+    })
+  })
+  it("со скобкой → голова и уточнение", () => {
+    expect(splitQualifier("Насосы (EC двигатель)")).toEqual({
+      head: "Насосы",
+      qualifier: "EC двигатель",
+    })
+  })
+  it("несбалансированная скобка → всё после '(' как уточнение", () => {
+    expect(splitQualifier("Клапаны (Ду50")).toEqual({
+      head: "Клапаны",
+      qualifier: "Ду50",
+    })
+  })
+})
+
+describe("excludeScale*", () => {
+  const pos = (states: string[]) => ({
+    chips: states.map((state) => ({ state })),
+  })
+  it("позиция: масштаб = число allowed", () => {
+    expect(
+      excludeScaleForPosition(pos(["allowed", "allowed", "excluded"]))
+    ).toEqual({
+      positions: 1,
+      classes: 2,
+    })
+  })
+  it("позиция без allowed → ноль позиций", () => {
+    expect(excludeScaleForPosition(pos(["excluded"]))).toEqual({
+      positions: 0,
+      classes: 0,
+    })
+  })
+  it("стандарт: суммирует allowed по позициям, позиции с allowed", () => {
+    const std = {
+      positions: [
+        pos(["allowed", "allowed"]),
+        pos(["allowed"]),
+        pos(["excluded"]),
+      ],
+    }
+    expect(excludeScaleForStandard(std)).toEqual({ positions: 2, classes: 3 })
+  })
+})
+
+describe("pluralClasses", () => {
+  it("склонение", () => {
+    expect(pluralClasses(1)).toBe("класс")
+    expect(pluralClasses(2)).toBe("класса")
+    expect(pluralClasses(5)).toBe("классов")
   })
 })

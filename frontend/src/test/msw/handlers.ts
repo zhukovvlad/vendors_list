@@ -145,4 +145,20 @@ export const handlers = [
   http.get(`${BASE}/vendors/:vendorId/where-allowed`, () =>
     HttpResponse.json(whereAllowedFixture)
   ),
+  http.post(
+    `${BASE}/vendors/:vendorId/listings`,
+    () => new HttpResponse(null, { status: 204 })
+  ),
+  http.post(`${BASE}/vendors/:vendorId/listings/exclude`, () =>
+    HttpResponse.json({ excluded_positions: 1, excluded_classes: 2 })
+  ),
+  http.post(
+    `${BASE}/vendors/:vendorId/listings/restore`,
+    () => new HttpResponse(null, { status: 204 })
+  ),
+  http.get(`${BASE}/meta/positions`, () =>
+    HttpResponse.json([
+      { id: 100, name: "Радиаторы отопления", category_path: "ОВиК" },
+    ])
+  ),
 ]

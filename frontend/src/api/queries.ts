@@ -114,6 +114,28 @@ export function useSegments(buildingTypeId?: number) {
   })
 }
 
+/**
+ * Позиции типа объекта для комбобокса «+ стандарт» (поиск по q). `building_type_id`
+ * обязателен в контракте API — гвардим на undefined внутри queryFn (typecheck),
+ * хотя `enabled` и не даёт queryFn реально выполниться раньше выбора стандарта.
+ */
+export function useMetaPositions(buildingTypeId?: number, q?: string) {
+  return useQuery({
+    queryKey: ["meta-positions", buildingTypeId, q],
+    enabled: buildingTypeId !== undefined,
+    queryFn: async () => {
+      if (buildingTypeId === undefined)
+        throw new Error("useMetaPositions: building_type_id не задан")
+      const { data, error } = await api.GET("/meta/positions", {
+        params: { query: { building_type_id: buildingTypeId, q } },
+      })
+      if (error) throw error
+      if (!data) throw new Error("Пустой ответ /meta/positions")
+      return data
+    },
+  })
+}
+
 export function useDashboard() {
   return useQuery({
     queryKey: ["dashboard"],
@@ -223,7 +245,11 @@ export function useRemoveAlias(id: number) {
 export function useUpdateVendorHeader(id: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (fields: { name?: string; note?: string }) => {
+    mutationFn: async (fields: {
+      name?: string
+      note?: string
+      kind?: string
+    }) => {
       const { data, error } = await api.PATCH("/vendors/{vendor_id}", {
         params: { path: { vendor_id: id } },
         body: fields,
@@ -236,5 +262,76 @@ export function useUpdateVendorHeader(id: number) {
       qc.invalidateQueries({ queryKey: ["matrix"] })
       qc.invalidateQueries({ queryKey: ["dashboard"] })
     },
+  })
+}
+
+/** Инвалидация после мутации разрешений: 4 ключа (дерево + карточка + матрица + дашборд). */
+function invalidatePermissions(
+  qc: ReturnType<typeof useQueryClient>,
+  id: number
+) {
+  qc.invalidateQueries({ queryKey: ["vendor-where-allowed", id] })
+  qc.invalidateQueries({ queryKey: ["vendor", id] })
+  qc.invalidateQueries({ queryKey: ["matrix"] })
+  qc.invalidateQueries({ queryKey: ["dashboard"] })
+}
+
+/** Добавить вендора в позицию по классам (общий «+ класс»/«+ позиция»/«+ стандарт»). */
+export function useAddListings(id: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: {
+      position_id: number
+      segment_ids: number[]
+    }) => {
+      const { error } = await api.POST("/vendors/{vendor_id}/listings", {
+        params: { path: { vendor_id: id } },
+        body,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => invalidatePermissions(qc, id),
+  })
+}
+
+/** Исключить вендора по scope; возвращает фактический масштаб (для тоста). */
+export function useExcludeListings(id: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: {
+      scope: "class" | "position" | "standard"
+      position_id?: number
+      segment_id?: number
+      building_type_id?: number
+    }) => {
+      const { data, error } = await api.POST(
+        "/vendors/{vendor_id}/listings/exclude",
+        {
+          params: { path: { vendor_id: id } },
+          body,
+        }
+      )
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => invalidatePermissions(qc, id),
+  })
+}
+
+/** «Вернуть» один класс. */
+export function useRestoreListing(id: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: { position_id: number; segment_id: number }) => {
+      const { error } = await api.POST(
+        "/vendors/{vendor_id}/listings/restore",
+        {
+          params: { path: { vendor_id: id } },
+          body,
+        }
+      )
+      if (error) throw error
+    },
+    onSuccess: () => invalidatePermissions(qc, id),
   })
 }

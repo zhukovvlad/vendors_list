@@ -284,3 +284,303 @@ async def test_where_allowed_segment_count(client, as_viewer, db_conn) -> None:
     std = next(s for s in resp.json()["standards"] if s["building_type_id"] == bt)
     assert std["segment_count"] == 3  # знаменатель = ВСЕ сегменты типа
     assert len(std["positions"][0]["chips"]) == 1  # вендор только в одном
+
+
+async def _live_cell_count(db_conn, vendor_id: int) -> int:
+    return (
+        await db_conn.execute(
+            text(
+                "SELECT count(*) FROM listing "
+                "WHERE vendor_id = :v AND status = 'allowed' AND deleted_at IS NULL"
+            ),
+            {"v": vendor_id},
+        )
+    ).scalar_one()
+
+
+async def test_add_listings_insert_branch(client, as_admin, db_conn) -> None:
+    bt = await f.make_building_type(db_conn, code="add-ins")
+    s1 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-1", sort_order=1)
+    s2 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-2", sort_order=2)
+    cat = await f.make_category(db_conn, name="add-ins-cat")
+    pos = await f.make_position(db_conn, category_id=cat, name="add-ins-pos")
+    v = await f.make_vendor(db_conn, name="add-ins-v")
+
+    resp = await client.post(
+        f"/vendors/{v}/listings", json={"position_id": pos, "segment_ids": [s1, s2]}
+    )
+    assert resp.status_code == 204
+    assert await _live_cell_count(db_conn, v) == 2
+    # маркер открытого релиза создан
+    assert (
+        await db_conn.execute(
+            text("SELECT count(*) FROM release WHERE building_type_id = :bt AND status = 'open'"),
+            {"bt": bt},
+        )
+    ).scalar_one() == 1
+
+
+async def test_add_listings_mixed_building_types_422(client, as_admin, db_conn) -> None:
+    # Сегменты из РАЗНЫХ типов объекта → 422, без частичной записи (open-маркер
+    # ставится один; смешанный запрос оставил бы второй тип без маркера).
+    bt1 = await f.make_building_type(db_conn, code="add-mix1")
+    bt2 = await f.make_building_type(db_conn, code="add-mix2")
+    s1 = await f.make_segment(db_conn, building_type_id=bt1, name="Кл-1", sort_order=1)
+    s2 = await f.make_segment(db_conn, building_type_id=bt2, name="Кл-2", sort_order=1)
+    cat = await f.make_category(db_conn, name="add-mix-cat")
+    pos = await f.make_position(db_conn, category_id=cat, name="add-mix-pos")
+    v = await f.make_vendor(db_conn, name="add-mix-v")
+
+    resp = await client.post(
+        f"/vendors/{v}/listings", json={"position_id": pos, "segment_ids": [s1, s2]}
+    )
+    assert resp.status_code == 422
+    # ни одной живой строки не записано, ни одного open-маркера не создано
+    assert await _live_cell_count(db_conn, v) == 0
+    for bt in (bt1, bt2):
+        assert (
+            await db_conn.execute(
+                text(
+                    "SELECT count(*) FROM release "
+                    "WHERE building_type_id = :bt AND status = 'open'"
+                ),
+                {"bt": bt},
+            )
+        ).scalar_one() == 0
+
+
+async def test_add_listings_undelete_branch_no_history(client, as_admin, db_conn) -> None:
+    bt = await f.make_building_type(db_conn, code="add-und")
+    s1 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-1", sort_order=1)
+    cat = await f.make_category(db_conn, name="add-und-cat")
+    pos = await f.make_position(db_conn, category_id=cat, name="add-und-pos")
+    v = await f.make_vendor(db_conn, name="add-und-v")
+    lid = await f.make_listing(
+        db_conn, position_id=pos, segment_id=s1, vendor_id=v, status="allowed"
+    )
+    await db_conn.execute(
+        text("UPDATE listing SET deleted_at = now() WHERE id = :id"), {"id": lid}
+    )
+
+    resp = await client.post(
+        f"/vendors/{v}/listings", json={"position_id": pos, "segment_ids": [s1]}
+    )
+    assert resp.status_code == 204
+    # та же строка ожила — не наплодили дубль-историю
+    total = (
+        await db_conn.execute(
+            text(
+                "SELECT count(*) FROM listing "
+                "WHERE position_id = :p AND segment_id = :s AND vendor_id = :v"
+            ),
+            {"p": pos, "s": s1, "v": v},
+        )
+    ).scalar_one()
+    assert total == 1
+    assert await _live_cell_count(db_conn, v) == 1
+
+
+async def test_add_listings_meta_row_conflict_409(client, as_admin, db_conn) -> None:
+    bt = await f.make_building_type(db_conn, code="add-409")
+    s1 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-1", sort_order=1)
+    cat = await f.make_category(db_conn, name="add-409-cat")
+    pos = await f.make_position(db_conn, category_id=cat, name="add-409-pos")
+    v = await f.make_vendor(db_conn, name="add-409-v")
+    # живая мета-строка (requirement) в ячейке → добавить вендора нельзя
+    await f.make_listing(
+        db_conn,
+        position_id=pos,
+        segment_id=s1,
+        vendor_id=None,
+        status="requirement",
+        spec_text="Россия",
+    )
+
+    resp = await client.post(
+        f"/vendors/{v}/listings", json={"position_id": pos, "segment_ids": [s1]}
+    )
+    assert resp.status_code == 409
+
+
+async def test_exclude_class_scale(client, as_admin, db_conn) -> None:
+    bt = await f.make_building_type(db_conn, code="exc-cls")
+    s1 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-1", sort_order=1)
+    cat = await f.make_category(db_conn, name="exc-cls-cat")
+    pos = await f.make_position(db_conn, category_id=cat, name="exc-cls-pos")
+    v = await f.make_vendor(db_conn, name="exc-cls-v")
+    await f.make_listing(db_conn, position_id=pos, segment_id=s1, vendor_id=v, status="allowed")
+
+    resp = await client.post(
+        f"/vendors/{v}/listings/exclude",
+        json={"scope": "class", "position_id": pos, "segment_id": s1},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"excluded_positions": 1, "excluded_classes": 1}
+    assert await _live_cell_count(db_conn, v) == 0
+
+
+async def test_exclude_position_scale(client, as_admin, db_conn) -> None:
+    """scope=position должен фильтровать классы ЧЕРЕЗ segment.building_type_id,
+    а не по одной лишь position_id: bt2 делит ту же позицию с bt1, но его класс
+    НЕ должен быть задет исключением, объявленным для bt1 (граница building_type)."""
+    bt = await f.make_building_type(db_conn, code="exc-pos")
+    s1 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-1", sort_order=1)
+    s2 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-2", sort_order=2)
+    cat = await f.make_category(db_conn, name="exc-pos-cat")
+    pos = await f.make_position(db_conn, category_id=cat, name="exc-pos-pos")
+    v = await f.make_vendor(db_conn, name="exc-pos-v")
+    await f.make_listing(db_conn, position_id=pos, segment_id=s1, vendor_id=v, status="allowed")
+    await f.make_listing(db_conn, position_id=pos, segment_id=s2, vendor_id=v, status="allowed")
+
+    # bt2 делит ТУ ЖЕ позицию (pos), тот же вендор — его класс должен пережить
+    # исключение scope=position, объявленное для bt1.
+    bt2 = await f.make_building_type(db_conn, code="exc-pos-bt2")
+    s3 = await f.make_segment(db_conn, building_type_id=bt2, name="Кл-1-bt2", sort_order=1)
+    await f.make_listing(db_conn, position_id=pos, segment_id=s3, vendor_id=v, status="allowed")
+
+    resp = await client.post(
+        f"/vendors/{v}/listings/exclude",
+        json={"scope": "position", "position_id": pos, "building_type_id": bt},
+    )
+    assert resp.status_code == 200
+    # масштаб не изменился из-за bt2 — исключены ровно 2 класса bt1, не 3
+    assert resp.json() == {"excluded_positions": 1, "excluded_classes": 2}
+    # bt2-класс пережил исключение bt1: осталась ровно 1 живая ячейка (s3)
+    assert await _live_cell_count(db_conn, v) == 1
+
+
+async def test_exclude_standard_scale(client, as_admin, db_conn) -> None:
+    bt = await f.make_building_type(db_conn, code="exc-std")
+    s1 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-1", sort_order=1)
+    cat = await f.make_category(db_conn, name="exc-std-cat")
+    pos1 = await f.make_position(db_conn, category_id=cat, name="exc-std-p1")
+    pos2 = await f.make_position(db_conn, category_id=cat, name="exc-std-p2")
+    v = await f.make_vendor(db_conn, name="exc-std-v")
+    await f.make_listing(db_conn, position_id=pos1, segment_id=s1, vendor_id=v, status="allowed")
+    await f.make_listing(db_conn, position_id=pos2, segment_id=s1, vendor_id=v, status="allowed")
+
+    resp = await client.post(
+        f"/vendors/{v}/listings/exclude",
+        json={"scope": "standard", "building_type_id": bt},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"excluded_positions": 2, "excluded_classes": 2}
+    assert await _live_cell_count(db_conn, v) == 0
+
+
+async def test_exclude_noop_returns_zeros_no_marker(client, as_admin, db_conn) -> None:
+    """Нечего исключать (нет живых allowed-строк) → 200, нули, open-маркер НЕ создан.
+    Прямая проверка семантики «маркер только при rowcount>0» (решение #2)."""
+    bt = await f.make_building_type(db_conn, code="exc-noop")
+    await f.make_segment(db_conn, building_type_id=bt, name="Кл-1", sort_order=1)
+    v = await f.make_vendor(db_conn, name="exc-noop-v")
+
+    resp = await client.post(
+        f"/vendors/{v}/listings/exclude",
+        json={"scope": "standard", "building_type_id": bt},
+    )
+    assert resp.status_code == 200  # идемпотентно, НЕ 404
+    assert resp.json() == {"excluded_positions": 0, "excluded_classes": 0}
+    # rowcount==0 → ensure_open_release не вызван → фантомного черновика нет
+    assert (
+        await db_conn.execute(
+            text("SELECT count(*) FROM release WHERE building_type_id = :bt AND status = 'open'"),
+            {"bt": bt},
+        )
+    ).scalar_one() == 0
+
+
+async def test_restore_undelete_branch(client, as_admin, db_conn) -> None:
+    bt = await f.make_building_type(db_conn, code="res-und")
+    s1 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-1", sort_order=1)
+    cat = await f.make_category(db_conn, name="res-und-cat")
+    pos = await f.make_position(db_conn, category_id=cat, name="res-und-pos")
+    v = await f.make_vendor(db_conn, name="res-und-v")
+    lid = await f.make_listing(
+        db_conn, position_id=pos, segment_id=s1, vendor_id=v, status="allowed"
+    )
+    await db_conn.execute(text("UPDATE listing SET deleted_at = now() WHERE id = :id"), {"id": lid})
+
+    resp = await client.post(
+        f"/vendors/{v}/listings/restore", json={"position_id": pos, "segment_id": s1}
+    )
+    assert resp.status_code == 204
+    assert await _live_cell_count(db_conn, v) == 1
+
+
+async def test_restore_insert_branch(client, as_admin, db_conn) -> None:
+    bt = await f.make_building_type(db_conn, code="res-ins")
+    s1 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-1", sort_order=1)
+    cat = await f.make_category(db_conn, name="res-ins-cat")
+    pos = await f.make_position(db_conn, category_id=cat, name="res-ins-pos")
+    v = await f.make_vendor(db_conn, name="res-ins-v")
+    # никакой строки нет (excluded = released−live, живой строки в БД может не быть)
+
+    resp = await client.post(
+        f"/vendors/{v}/listings/restore", json={"position_id": pos, "segment_id": s1}
+    )
+    assert resp.status_code == 204
+    assert await _live_cell_count(db_conn, v) == 1
+
+
+async def test_restore_meta_row_conflict_409(client, as_admin, db_conn) -> None:
+    """restore разделяет _add_one_class с add — тот же P0001→409 путь на живой
+    мета-строке в ячейке; фиксируем контракт явным тестом (зеркало
+    test_add_listings_meta_row_conflict_409)."""
+    bt = await f.make_building_type(db_conn, code="res-409")
+    s1 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-1", sort_order=1)
+    cat = await f.make_category(db_conn, name="res-409-cat")
+    pos = await f.make_position(db_conn, category_id=cat, name="res-409-pos")
+    v = await f.make_vendor(db_conn, name="res-409-v")
+    # живая мета-строка (requirement) в ячейке → восстановить вендора нельзя
+    await f.make_listing(
+        db_conn,
+        position_id=pos,
+        segment_id=s1,
+        vendor_id=None,
+        status="requirement",
+        spec_text="Россия",
+    )
+
+    resp = await client.post(
+        f"/vendors/{v}/listings/restore", json={"position_id": pos, "segment_id": s1}
+    )
+    assert resp.status_code == 409
+
+
+async def test_patch_kind(client, as_admin, db_conn) -> None:
+    v = await f.make_vendor(db_conn, name="kind-v", kind="manufacturer")
+    resp = await client.patch(f"/vendors/{v}", json={"kind": "supplier"})
+    assert resp.status_code == 200
+    assert resp.json()["kind"] == "supplier"
+
+
+async def test_patch_kind_invalid_422(client, as_admin, db_conn) -> None:
+    v = await f.make_vendor(db_conn, name="kind-bad-v")
+    resp = await client.patch(f"/vendors/{v}", json={"kind": "producer"})
+    assert resp.status_code == 422
+
+
+async def test_patch_kind_explicit_null_422(client, as_admin, db_conn) -> None:
+    # kind — NOT NULL: явный null отклоняется валидатором (422), а не доходит до
+    # UPDATE ... SET kind = NULL (иначе 500). «Поле не пришло» этим не задето.
+    v = await f.make_vendor(db_conn, name="kind-null-v", kind="supplier")
+    resp = await client.patch(f"/vendors/{v}", json={"kind": None})
+    assert resp.status_code == 422
+    # значение не изменилось
+    resp2 = await client.get(f"/vendors/{v}")
+    assert resp2.json()["kind"] == "supplier"
+
+
+async def test_listing_mutations_rbac_viewer_403(client, as_viewer, db_conn) -> None:
+    v = await f.make_vendor(db_conn, name="rbac-v")
+    r1 = await client.post(f"/vendors/{v}/listings", json={"position_id": 1, "segment_ids": [1]})
+    r2 = await client.post(
+        f"/vendors/{v}/listings/exclude", json={"scope": "standard", "building_type_id": 1}
+    )
+    r3 = await client.post(
+        f"/vendors/{v}/listings/restore", json={"position_id": 1, "segment_id": 1}
+    )
+    assert r1.status_code == 403
+    assert r2.status_code == 403
+    assert r3.status_code == 403

@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 _from_row = ConfigDict(from_attributes=True)
 
@@ -30,6 +30,12 @@ class Segment(BaseModel):
     group_id: int | None
     name: str
     sort_order: int
+
+
+class MetaPosition(BaseModel):
+    id: int
+    name: str
+    category_path: str | None
 
 
 # --- Живой перечень (listing_live) ------------------------------------------
@@ -285,12 +291,16 @@ class AliasCreate(BaseModel):
     alias: str = Field(min_length=1)
 
 
+_VENDOR_KINDS = {"manufacturer", "supplier", "other"}
+
+
 class VendorHeaderUpdate(BaseModel):
     """Инлайн-правка шапки. Partial: в эндпоинте читаем model_dump(exclude_unset=True),
     чтобы отличить «поле не пришло» от «note: null (очистить)»."""
 
     name: str | None = None
     note: str | None = None
+    kind: str | None = None
 
     @field_validator("name")
     @classmethod
@@ -301,3 +311,50 @@ class VendorHeaderUpdate(BaseModel):
         if not stripped:
             raise ValueError("Имя не может быть пустым")
         return stripped
+
+    @field_validator("kind")
+    @classmethod
+    def _kind_in_enum(cls, v: str | None) -> str:
+        # kind — NOT NULL в БД. «Поле не пришло» (default None, валидатор не
+        # вызывается) отличаем от «kind: null» (валидатор вызван с None): явный
+        # null недопустим, иначе model_dump(exclude_unset) пронёс бы его в
+        # UPDATE ... SET kind = NULL → нарушение NOT NULL → 500. Отклоняем → 422.
+        if v is None:
+            raise ValueError("Тип вендора не может быть пустым")
+        if v not in _VENDOR_KINDS:
+            raise ValueError("Недопустимый тип вендора")
+        return v
+
+
+class ListingAdd(BaseModel):
+    position_id: int
+    segment_ids: list[int] = Field(min_length=1)
+
+
+class ListingExclude(BaseModel):
+    """scope-дискриминатор. Обязательность полей — по scope (валидатор)."""
+
+    scope: Literal["class", "position", "standard"]
+    position_id: int | None = None
+    segment_id: int | None = None
+    building_type_id: int | None = None
+
+    @model_validator(mode="after")
+    def _require_scope_fields(self) -> ListingExclude:
+        if self.scope == "class" and (self.position_id is None or self.segment_id is None):
+            raise ValueError("scope=class требует position_id и segment_id")
+        if self.scope == "position" and (self.position_id is None or self.building_type_id is None):
+            raise ValueError("scope=position требует position_id и building_type_id")
+        if self.scope == "standard" and self.building_type_id is None:
+            raise ValueError("scope=standard требует building_type_id")
+        return self
+
+
+class ListingRestore(BaseModel):
+    position_id: int
+    segment_id: int
+
+
+class ListingExcludeResult(BaseModel):
+    excluded_positions: int
+    excluded_classes: int
