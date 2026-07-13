@@ -752,4 +752,24 @@ describe("VendorCardScreen — клиппинг edit + полоса + типог
     expect(stripName.className).not.toContain("text-[15px]")
     expect(posName.className).not.toContain("text-caption")
   })
+
+  it("v4: имя стандарта приглушено даже в раскрытом виде (не text-foreground)", async () => {
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(screen.getByRole("button", { name: /^Жилой дом/ }))
+    const stripName = screen.getByText("Жилой дом")
+    // полоса — «группировка, не контент»: тон muted в обоих состояниях,
+    // открытый лишь чуть светлее. Ярким foreground в open быть не должна.
+    expect(stripName.className).toContain("text-muted-foreground")
+    expect(stripName.className).not.toContain("text-foreground")
+  })
+
+  it("v4: чипы классов приглушены (не яркий text-foreground имени позиции)", async () => {
+    renderAt() // дефолтная фикстура: allowed-чип «Делюкс»
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(screen.getByRole("button", { name: /^Жилой дом/ }))
+    const chip = await screen.findByText("Делюкс")
+    expect(chip.className).toContain("text-muted-foreground")
+    expect(chip.className).not.toContain("text-[15px]")
+  })
 })

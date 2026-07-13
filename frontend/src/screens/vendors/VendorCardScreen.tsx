@@ -607,7 +607,7 @@ export function VendorCardScreen() {
                           aria-hidden
                           className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90 group-data-[state=open]:text-primary"
                         />
-                        <span className="flex-1 text-caption font-medium tracking-[0.09em] text-muted-foreground uppercase group-data-[state=open]:text-foreground">
+                        <span className="flex-1 text-caption font-medium tracking-[0.09em] text-muted-foreground/70 uppercase group-data-[state=open]:text-muted-foreground">
                           {s.building_type_name}
                         </span>
                         {/* Счётчик/сводка — атрибут просмотра: в edit полоса растёт
@@ -719,7 +719,7 @@ export function VendorCardScreen() {
                                       >
                                         <Badge
                                           variant="outline"
-                                          className="bg-accent"
+                                          className="bg-accent text-[11px] font-normal text-muted-foreground"
                                         >
                                           {c.segment_name}
                                         </Badge>
@@ -747,7 +747,7 @@ export function VendorCardScreen() {
                                       >
                                         <Badge
                                           variant="outline"
-                                          className="border-dashed border-border-strong text-muted-foreground line-through"
+                                          className="border-dashed border-border-strong text-[11px] font-normal text-muted-foreground line-through"
                                           title={excludedTooltip(
                                             c.release_label
                                           )}
