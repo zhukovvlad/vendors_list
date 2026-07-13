@@ -187,15 +187,25 @@ export function VendorCardScreen() {
   )
   const [addStandardOpen, setAddStandardOpen] = useState(false)
 
-  /** Общий тост фактического масштаба (гард на нули — гонка/no-op тоста не даёт). */
-  async function confirmExclude(body: ExcludeBody) {
-    const res = await excludeListings.mutateAsync(body)
-    if (res && res.excluded_classes > 0) {
-      toast(
-        `Исключён из ${res.excluded_positions} ${pluralPositions(
-          res.excluded_positions
-        )} и ${res.excluded_classes} ${pluralClasses(res.excluded_classes)}`
-      )
+  /**
+   * Исключение с фидбэком: тост фактического масштаба на успехе (гард на нули —
+   * гонка/no-op тоста не даёт), тост ошибки на отказе (409/сеть). Возвращает
+   * true при успехе — вызыватель-диалог закрывается только тогда.
+   */
+  async function confirmExclude(body: ExcludeBody): Promise<boolean> {
+    try {
+      const res = await excludeListings.mutateAsync(body)
+      if (res && res.excluded_classes > 0) {
+        toast(
+          `Исключён из ${res.excluded_positions} ${pluralPositions(
+            res.excluded_positions
+          )} и ${res.excluded_classes} ${pluralClasses(res.excluded_classes)}`
+        )
+      }
+      return true
+    } catch {
+      toast("Не удалось исключить — попробуйте ещё раз")
+      return false
     }
   }
 
@@ -651,13 +661,13 @@ export function VendorCardScreen() {
                                           <button
                                             type="button"
                                             aria-label={`исключить класс ${c.segment_name}`}
-                                            onClick={() =>
-                                              confirmExclude({
+                                            onClick={() => {
+                                              void confirmExclude({
                                                 scope: "class",
                                                 position_id: p.position_id,
                                                 segment_id: c.segment_id,
                                               })
-                                            }
+                                            }}
                                             className="text-muted-foreground hover:text-destructive"
                                           >
                                             <X className="size-3" />
@@ -686,10 +696,18 @@ export function VendorCardScreen() {
                                             type="button"
                                             aria-label={`вернуть ${c.segment_name}`}
                                             onClick={() =>
-                                              restoreListing.mutate({
-                                                position_id: p.position_id,
-                                                segment_id: c.segment_id,
-                                              })
+                                              restoreListing.mutate(
+                                                {
+                                                  position_id: p.position_id,
+                                                  segment_id: c.segment_id,
+                                                },
+                                                {
+                                                  onError: () =>
+                                                    toast(
+                                                      "Не удалось вернуть — попробуйте ещё раз"
+                                                    ),
+                                                }
+                                              )
                                             }
                                             className="text-caption text-primary hover:underline"
                                           >
@@ -705,10 +723,18 @@ export function VendorCardScreen() {
                                       presentSegmentIds={presentSegmentIds}
                                       pending={addListings.isPending}
                                       onAdd={(segmentIds) =>
-                                        addListings.mutate({
-                                          position_id: p.position_id,
-                                          segment_ids: segmentIds,
-                                        })
+                                        addListings.mutate(
+                                          {
+                                            position_id: p.position_id,
+                                            segment_ids: segmentIds,
+                                          },
+                                          {
+                                            onError: () =>
+                                              toast(
+                                                "Не удалось добавить класс — попробуйте ещё раз"
+                                              ),
+                                          }
+                                        )
                                       }
                                     />
                                   )}
@@ -772,9 +798,11 @@ export function VendorCardScreen() {
         pending={excludeListings.isPending}
         onConfirm={() => {
           if (!excludeDialog) return
-          void confirmExclude(excludeDialog.body).finally(() =>
-            setExcludeDialog(null)
-          )
+          // Закрываем диалог ТОЛЬКО при успехе — на отказе (409/сеть)
+          // confirmExclude показал тост, диалог остаётся для повтора.
+          void confirmExclude(excludeDialog.body).then((ok) => {
+            if (ok) setExcludeDialog(null)
+          })
         }}
       />
     </div>

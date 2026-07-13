@@ -467,20 +467,34 @@ describe("VendorCardScreen — инлайн-правка шапки", () => {
 })
 
 describe("VendorCardScreen — операции разрешений", () => {
-  it("класс «×» → мутация без диалога + появляется «вернуть»", async () => {
-    let excludeBody: unknown = null
+  /** Перехватывает тело POST /listings/exclude; по умолчанию отвечает успехом. */
+  function stubExclude(errorStatus?: number) {
+    const captured: { body: unknown } = { body: null }
     server.use(
       http.post(
         "/api/vendors/:vendorId/listings/exclude",
         async ({ request }) => {
-          excludeBody = await request.json()
+          captured.body = await request.json()
+          if (errorStatus !== undefined) {
+            // JSON-тело обязательно: без него openapi-fetch не заполнит `error`,
+            // и мутация ошибочно считается успешной.
+            return HttpResponse.json(
+              { detail: "конфликт" },
+              { status: errorStatus }
+            )
+          }
           return HttpResponse.json({
             excluded_positions: 1,
-            excluded_classes: 1,
+            excluded_classes: 2,
           })
         }
       )
     )
+    return captured
+  }
+
+  it("класс «×» → мгновенная мутация scope=class без диалога", async () => {
+    const captured = stubExclude()
     renderAt()
     await screen.findByRole("heading", { level: 1, name: /System Air/ })
     await enterEditMode()
@@ -488,11 +502,18 @@ describe("VendorCardScreen — операции разрешений", () => {
       screen.getByRole("button", { name: /исключить класс Делюкс/ })
     )
     await waitFor(() =>
-      expect(excludeBody).toMatchObject({ scope: "class", segment_id: 11 })
+      expect(captured.body).toMatchObject({
+        scope: "class",
+        position_id: 100,
+        segment_id: 11,
+      })
     )
+    // точечное исключение — без диалога подтверждения
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
   })
 
-  it("«⊖» позиции → диалог с масштабом", async () => {
+  it("«⊖» позиции → подтверждение → мутация scope=position, диалог закрывается", async () => {
+    const captured = stubExclude()
     renderAt()
     await screen.findByRole("heading", { level: 1, name: /System Air/ })
     await enterEditMode()
@@ -500,9 +521,21 @@ describe("VendorCardScreen — операции разрешений", () => {
       screen.getByRole("button", { name: /исключить из позиции/ })
     )
     expect(await screen.findByText(/Будет исключён из/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Исключить" }))
+    await waitFor(() =>
+      expect(captured.body).toMatchObject({
+        scope: "position",
+        position_id: 100,
+        building_type_id: 1,
+      })
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    )
   })
 
-  it("kebab стандарта → «Исключить из стандарта» → диалог", async () => {
+  it("kebab стандарта → подтверждение → мутация scope=standard, диалог закрывается", async () => {
+    const captured = stubExclude()
     renderAt()
     await screen.findByRole("heading", { level: 1, name: /System Air/ })
     await enterEditMode()
@@ -511,6 +544,32 @@ describe("VendorCardScreen — операции разрешений", () => {
     )
     await userEvent.click(await screen.findByText("Исключить из стандарта"))
     expect(await screen.findByText(/Будет исключён из/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Исключить" }))
+    await waitFor(() =>
+      expect(captured.body).toMatchObject({
+        scope: "standard",
+        building_type_id: 1,
+      })
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    )
+  })
+
+  it("отказ мутации исключения → диалог остаётся открытым", async () => {
+    const captured = stubExclude(409)
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode()
+    await userEvent.click(
+      screen.getByRole("button", { name: /исключить из позиции/ })
+    )
+    await screen.findByText(/Будет исключён из/)
+    await userEvent.click(screen.getByRole("button", { name: "Исключить" }))
+    // запрос ушёл и провалился (409) — но диалог НЕ закрывается: пользователь
+    // видит контекст и может повторить (закрытие только на успехе).
+    await waitFor(() => expect(captured.body).not.toBeNull())
+    expect(screen.getByRole("dialog")).toBeInTheDocument()
   })
 })
 
