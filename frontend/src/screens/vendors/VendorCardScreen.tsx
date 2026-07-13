@@ -348,7 +348,7 @@ export function VendorCardScreen() {
                             {isAllClasses(p, s.segment_count) ? (
                               <span className="flex items-center gap-1 text-caption text-muted-foreground">
                                 <CheckCheck
-                                  className="text-success size-3.5"
+                                  className="size-3.5 text-mint"
                                   aria-hidden
                                 />
                                 все классы
