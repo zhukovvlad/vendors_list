@@ -111,6 +111,7 @@ async def get_where_allowed(
                     building_type_id=r["building_type_id"],
                     building_type_name=r["building_type_name"],
                     position_count=0,
+                    segment_count=0,
                     positions=[],
                 )
             )
@@ -132,6 +133,21 @@ async def get_where_allowed(
                 release_label=r["release_label"],
             )
         )
+
+    if standards:
+        counts = {
+            row["building_type_id"]: row["n"]
+            for row in (
+                await conn.execute(
+                    text(
+                        "SELECT building_type_id, count(*) AS n "
+                        "FROM segment GROUP BY building_type_id"
+                    )
+                )
+            ).mappings()
+        }
+        for s in standards:
+            s.segment_count = counts.get(s.building_type_id, 0)
 
     return WhereAllowed(standards=standards)
 

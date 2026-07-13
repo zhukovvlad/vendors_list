@@ -265,3 +265,22 @@ async def test_patch_forbidden_for_viewer(client, as_viewer, db_conn) -> None:
     v = await f.make_vendor(db_conn, name="patch-viewer")
     resp = await client.patch(f"/vendors/{v}", json={"name": "nope"})
     assert resp.status_code == 403
+
+
+async def test_where_allowed_segment_count(client, as_viewer, db_conn) -> None:
+    bt = await f.make_building_type(db_conn, code="wa-segcount")
+    s1 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-1", sort_order=1)
+    await f.make_segment(db_conn, building_type_id=bt, name="Кл-2", sort_order=2)
+    await f.make_segment(db_conn, building_type_id=bt, name="Кл-3", sort_order=3)
+    cat = await f.make_category(db_conn, name="wa-sc-cat")
+    pos = await f.make_position(db_conn, category_id=cat, name="wa-sc-pos")
+    v = await f.make_vendor(db_conn, name="wa-sc-v")
+    await f.make_listing(
+        db_conn, position_id=pos, segment_id=s1, vendor_id=v, status="allowed"
+    )
+
+    resp = await client.get(f"/vendors/{v}/where-allowed")
+    assert resp.status_code == 200
+    std = next(s for s in resp.json()["standards"] if s["building_type_id"] == bt)
+    assert std["segment_count"] == 3  # знаменатель = ВСЕ сегменты типа
+    assert len(std["positions"][0]["chips"]) == 1  # вендор только в одном

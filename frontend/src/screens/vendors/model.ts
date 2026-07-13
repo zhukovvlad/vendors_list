@@ -58,6 +58,9 @@ type ChipLike = { state: string }
 type PositionLike = { chips: ChipLike[] }
 type StandardLike = { positions: PositionLike[] }
 
+/** Стандарт для правила «все классы»: `PositionLike` + знаменатель `segment_count`. */
+type CoverageStandard = { segment_count: number; positions: PositionLike[] }
+
 /** Есть ли в дереве хоть один исключённый (зачёркнутый) класс. */
 export function hasExcludedChips(standards: StandardLike[]): boolean {
   return standards.some((s) =>
@@ -66,13 +69,37 @@ export function hasExcludedChips(standards: StandardLike[]): boolean {
 }
 
 /**
- * Легенда под деревом «Где разрешён». Пояснение про зачёркивание добавляем
- * ТОЛЬКО когда в выборке реально есть исключённый класс — иначе легенда
- * объясняла бы то, чего на экране нет.
+ * Позиция покрыта «все классы»: вендор разрешён во ВСЕХ сегментах типа и нет
+ * исключённых. `excluded > 0` всегда даёт false — исключение не прячется за сводкой.
  */
-export function whereAllowedLegend(hasExcluded: boolean): string {
-  const base = "показано текущее состояние стандартов"
-  return hasExcluded
-    ? `зачёркнутый класс — был в последнем релизе, исключён · ${base}`
-    : base
+export function isAllClasses(
+  position: PositionLike,
+  segmentCount: number
+): boolean {
+  if (segmentCount <= 0) return false
+  let allowed = 0
+  let excluded = 0
+  for (const c of position.chips) {
+    if (c.state === "allowed") allowed++
+    else if (c.state === "excluded") excluded++
+  }
+  return excluded === 0 && allowed === segmentCount
+}
+
+/** Стандарт целиком «все классы»: он непустой и все его позиции — «все классы». */
+export function standardAllClasses(standard: CoverageStandard): boolean {
+  return (
+    standard.positions.length > 0 &&
+    standard.positions.every((p) => isAllClasses(p, standard.segment_count))
+  )
+}
+
+/**
+ * Базовая легенда под деревом «Где разрешён» («показано текущее состояние
+ * стандартов»). Вариант с пояснением про зачёркивание рендерится инлайн в
+ * компоненте (с визуальным образцом-чипом), когда в выборке есть исключённый
+ * класс, — поэтому здесь только базовый текст.
+ */
+export function whereAllowedLegend(): string {
+  return "показано текущее состояние стандартов"
 }

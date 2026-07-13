@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Link } from "@tanstack/react-router"
-import { Award, Merge, Plus, Star, X } from "lucide-react"
+import { Accordion as AccordionPrimitive } from "radix-ui"
+import { Award, ChevronRight, Merge, Plus, Star, X } from "lucide-react"
 
 import {
   useAddAlias,
@@ -14,7 +15,6 @@ import {
   Accordion,
   AccordionContent,
   AccordionItem,
-  AccordionTrigger,
 } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -25,10 +25,12 @@ import {
   avatarInitial,
   excludedTooltip,
   hasExcludedChips,
+  isAllClasses,
   kindLabel,
   pluralPositions,
   pluralStandards,
   pluralVendors,
+  standardAllClasses,
   WHERE_ALLOWED_EMPTY,
   whereAllowedLegend,
 } from "./model"
@@ -256,8 +258,8 @@ export function VendorCardScreen() {
       </section>
 
       {/* Где разрешён */}
-      <section className={`${CARD} px-5 py-[15px]`}>
-        <div className="flex items-baseline justify-between">
+      <section className={`${CARD} py-[15px]`}>
+        <div className="flex items-baseline justify-between px-5">
           <span className="text-caption text-muted-foreground uppercase">
             Где разрешён
           </span>
@@ -270,69 +272,109 @@ export function VendorCardScreen() {
         </div>
 
         {whereAllowed.isPending ? (
-          <div className="mt-2 text-small text-muted-foreground">Загрузка…</div>
+          <div className="mt-2 px-5 text-small text-muted-foreground">
+            Загрузка…
+          </div>
         ) : whereAllowed.isError ? (
-          <div className="mt-2 text-small text-muted-foreground">
+          <div className="mt-2 px-5 text-small text-muted-foreground">
             Не удалось загрузить
           </div>
         ) : standards.length === 0 ? (
-          <div className="mt-2 text-small text-muted-foreground">
+          <div className="mt-2 px-5 text-small text-muted-foreground">
             {WHERE_ALLOWED_EMPTY}
           </div>
         ) : (
           <>
-            <Accordion type="multiple" className="mt-2">
-              {standards.map((s) => (
-                <AccordionItem
-                  key={s.building_type_id}
-                  value={String(s.building_type_id)}
-                >
-                  <AccordionTrigger>
-                    <span className="flex-1 text-left">
-                      {s.building_type_name}
-                    </span>
-                    <span className="mr-2 text-small text-muted-foreground">
-                      {`${s.position_count} ${pluralPositions(s.position_count)}`}
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent className="ml-6 border-l border-border pl-4">
-                    <div className="space-y-3">
-                      {s.positions.map((p) => (
-                        <div key={p.position_id} className="space-y-1.5">
-                          <div className="text-small">{p.position_name}</div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {p.chips.map((c) =>
-                              c.state === "allowed" ? (
-                                <Badge
-                                  key={c.segment_id}
-                                  variant="outline"
-                                  className="bg-accent"
-                                >
-                                  {c.segment_name}
-                                </Badge>
-                              ) : (
-                                <Badge
-                                  key={c.segment_id}
-                                  variant="outline"
-                                  className="border-dashed border-border-strong text-muted-foreground line-through"
-                                  title={excludedTooltip(c.release_label)}
-                                  aria-label={excludedTooltip(c.release_label)}
-                                >
-                                  {c.segment_name}
-                                </Badge>
-                              )
+            <Accordion type="multiple" className="mt-2.5">
+              {standards.map((s) => {
+                const count = `${s.position_count} ${pluralPositions(s.position_count)}`
+                const summary = standardAllClasses(s)
+                  ? `${count} · все классы`
+                  : count
+                return (
+                  <AccordionItem
+                    key={s.building_type_id}
+                    value={String(s.building_type_id)}
+                    className="border-b-0"
+                  >
+                    <AccordionPrimitive.Header className="flex">
+                      <AccordionPrimitive.Trigger className="group flex w-full items-center gap-2.5 border-y border-border bg-muted px-5 py-2.5 text-left outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                        <ChevronRight
+                          aria-hidden
+                          className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90 group-data-[state=open]:text-primary"
+                        />
+                        <span className="flex-1 text-small font-medium">
+                          {s.building_type_name}
+                        </span>
+                        <span className="text-caption text-muted-foreground">
+                          {summary}
+                        </span>
+                      </AccordionPrimitive.Trigger>
+                    </AccordionPrimitive.Header>
+                    <AccordionContent className="mr-5 ml-8 border-l border-border pl-4">
+                      <div className="divide-y divide-border/60">
+                        {s.positions.map((p) => (
+                          <div
+                            key={p.position_id}
+                            className="flex flex-wrap items-center gap-x-2 gap-y-1.5 py-2"
+                          >
+                            <span className="flex-1 text-small">
+                              {p.position_name}
+                            </span>
+                            {isAllClasses(p, s.segment_count) ? (
+                              <Badge
+                                variant="outline"
+                                className="text-muted-foreground"
+                              >
+                                все классы
+                              </Badge>
+                            ) : (
+                              <div className="flex w-full flex-wrap gap-1.5">
+                                {p.chips.map((c) =>
+                                  c.state === "allowed" ? (
+                                    <Badge
+                                      key={c.segment_id}
+                                      variant="outline"
+                                      className="bg-accent"
+                                    >
+                                      {c.segment_name}
+                                    </Badge>
+                                  ) : (
+                                    <Badge
+                                      key={c.segment_id}
+                                      variant="outline"
+                                      className="border-dashed border-border-strong text-muted-foreground line-through"
+                                      title={excludedTooltip(c.release_label)}
+                                      aria-label={excludedTooltip(
+                                        c.release_label
+                                      )}
+                                    >
+                                      {c.segment_name}
+                                    </Badge>
+                                  )
+                                )}
+                              </div>
                             )}
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                )
+              })}
             </Accordion>
-            <p className="mt-2.5 rounded-md border border-border bg-muted px-3 py-2 text-caption text-muted-foreground">
-              {whereAllowedLegend(hasExcludedChips(standards))}
-            </p>
+            {hasExcludedChips(standards) ? (
+              <p className="mt-3 flex items-center gap-1.5 px-5 text-caption text-muted-foreground">
+                <span className="rounded-sm border border-dashed border-border-strong px-1.5 line-through">
+                  класс
+                </span>
+                — был в последнем релизе, исключён · {whereAllowedLegend()}
+              </p>
+            ) : (
+              <p className="mt-3 px-5 text-caption text-muted-foreground">
+                {whereAllowedLegend()}
+              </p>
+            )}
           </>
         )}
       </section>

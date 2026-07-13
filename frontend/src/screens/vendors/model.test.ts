@@ -4,10 +4,12 @@ import {
   avatarInitial,
   excludedTooltip,
   hasExcludedChips,
+  isAllClasses,
   kindLabel,
   pluralPositions,
   pluralStandards,
   pluralVendors,
+  standardAllClasses,
   whereAllowedLegend,
 } from "./model"
 
@@ -71,15 +73,8 @@ describe("pluralPositions", () => {
 })
 
 describe("whereAllowedLegend", () => {
-  it("с исключёнными — добавляет пояснение про зачёркивание", () => {
-    const legend = whereAllowedLegend(true)
-    expect(legend).toContain("зачёркнутый класс")
-    expect(legend).toContain("показано текущее состояние стандартов")
-  })
-  it("без исключённых — только общая часть, без пояснения про зачёркивание", () => {
-    expect(whereAllowedLegend(false)).toBe(
-      "показано текущее состояние стандартов"
-    )
+  it("отдаёт базовый текст легенды", () => {
+    expect(whereAllowedLegend()).toBe("показано текущее состояние стандартов")
   })
 })
 
@@ -104,5 +99,42 @@ describe("avatarInitial", () => {
   })
   it("пустое имя → ?", () => {
     expect(avatarInitial("   ")).toBe("?")
+  })
+})
+
+describe("isAllClasses / standardAllClasses", () => {
+  const pos = (states: string[]) => ({
+    chips: states.map((state, i) => ({ segment_id: i, state })),
+  })
+
+  it("полное покрытие без excluded → все классы", () => {
+    expect(isAllClasses(pos(["allowed", "allowed"]), 2)).toBe(true)
+  })
+  it("полное покрытие, но есть excluded → НЕ все классы (перечень)", () => {
+    expect(isAllClasses(pos(["allowed", "allowed", "excluded"]), 3)).toBe(false)
+  })
+  it("частичное покрытие → НЕ все классы", () => {
+    expect(isAllClasses(pos(["allowed", "allowed"]), 4)).toBe(false)
+  })
+  it("одноклассовый тип с покрытием → все классы", () => {
+    expect(isAllClasses(pos(["allowed"]), 1)).toBe(true)
+  })
+  it("segment_count 0 → не все классы (страховка)", () => {
+    expect(isAllClasses(pos([]), 0)).toBe(false)
+  })
+
+  it("стандарт: все позиции all-classes → true", () => {
+    const std = {
+      segment_count: 2,
+      positions: [pos(["allowed", "allowed"]), pos(["allowed", "allowed"])],
+    }
+    expect(standardAllClasses(std)).toBe(true)
+  })
+  it("стандарт: хотя бы одна позиция не all-classes → false", () => {
+    const std = {
+      segment_count: 2,
+      positions: [pos(["allowed", "allowed"]), pos(["allowed"])],
+    }
+    expect(standardAllClasses(std)).toBe(false)
   })
 })
