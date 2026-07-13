@@ -3,9 +3,11 @@ import { Link } from "@tanstack/react-router"
 import { Accordion as AccordionPrimitive } from "radix-ui"
 import {
   Award,
+  Check,
   CheckCheck,
   ChevronRight,
   Merge,
+  Pencil,
   Plus,
   Star,
   X,
@@ -59,6 +61,8 @@ export function VendorCardScreen() {
   const [aliasOpen, setAliasOpen] = useState(false)
   const [aliasDraft, setAliasDraft] = useState("")
   const [nameError, setNameError] = useState<string | null>(null)
+  const [editMode, setEditMode] = useState(false)
+  const [expanded, setExpanded] = useState<string[]>([])
 
   if (isPending)
     return (
@@ -76,6 +80,35 @@ export function VendorCardScreen() {
 
   return (
     <div className="mx-auto flex max-w-[720px] flex-col gap-3 py-6">
+      <div className="flex items-center justify-between">
+        <span className="text-caption text-muted-foreground uppercase">
+          Вендор
+        </span>
+        <Button
+          variant={editMode ? "default" : "outline"}
+          size="sm"
+          className="gap-1.5"
+          onClick={() => {
+            if (!editMode)
+              setExpanded(standards.map((s) => String(s.building_type_id)))
+            setEditMode((v) => !v)
+          }}
+        >
+          {editMode ? (
+            <Check className="size-3.5" aria-hidden />
+          ) : (
+            <Pencil className="size-3.5" aria-hidden />
+          )}
+          {editMode ? "Готово" : "Редактировать"}
+        </Button>
+      </div>
+      {editMode && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5 text-caption text-muted-foreground">
+          Свойства вендора сохраняются сразу · правки разрешений применяются
+          немедленно и войдут в следующий релиз (текущие релизы не
+          затрагиваются)
+        </div>
+      )}
       {/* Шапка */}
       <section className={`${CARD} px-5 py-[18px]`}>
         <div className="flex items-center gap-3.5">
@@ -88,6 +121,7 @@ export function VendorCardScreen() {
                 <InlineEditText
                   value={data.name}
                   ariaLabel="Редактировать имя"
+                  readOnly={!editMode}
                   onEditStart={() => setNameError(null)}
                   error={nameError}
                   displayClassName="max-w-full truncate text-left hover:opacity-80"
@@ -136,6 +170,7 @@ export function VendorCardScreen() {
               <InlineEditText
                 value={data.note ?? ""}
                 ariaLabel="Редактировать примечание"
+                readOnly={!editMode}
                 multiline
                 placeholder="+ примечание"
                 displayClassName="text-left hover:text-foreground"
@@ -150,7 +185,7 @@ export function VendorCardScreen() {
             Соглашение
             <Switch
               checked={data.starred}
-              disabled={toggleAgreement.isPending}
+              disabled={!editMode || toggleAgreement.isPending}
               onCheckedChange={(next) => toggleAgreement.mutate(next)}
               aria-label="Соглашение о сотрудничестве"
             />
@@ -172,51 +207,54 @@ export function VendorCardScreen() {
           {data.aliases.map((a) => (
             <Badge key={a.id} variant="outline" className="gap-1">
               {a.alias}
-              <button
-                type="button"
-                aria-label={`удалить ${a.alias}`}
-                onClick={() => removeAlias.mutate(a.id)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-3" />
-              </button>
+              {editMode && (
+                <button
+                  type="button"
+                  aria-label={`удалить ${a.alias}`}
+                  onClick={() => removeAlias.mutate(a.id)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-3" />
+                </button>
+              )}
             </Badge>
           ))}
-          {aliasOpen ? (
-            <span className="flex items-center gap-1">
-              <input
-                autoFocus
-                value={aliasDraft}
-                onChange={(e) => setAliasDraft(e.target.value)}
-                placeholder="вариант написания"
-                className="h-7 rounded-md border border-border bg-transparent px-2 text-small"
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={aliasDraft.trim() === "" || addAlias.isPending}
-                onClick={() => {
-                  addAlias.mutate(aliasDraft.trim(), {
-                    onSuccess: () => {
-                      setAliasDraft("")
-                      setAliasOpen(false)
-                    },
-                  })
-                }}
+          {editMode &&
+            (aliasOpen ? (
+              <span className="flex items-center gap-1">
+                <input
+                  autoFocus
+                  value={aliasDraft}
+                  onChange={(e) => setAliasDraft(e.target.value)}
+                  placeholder="вариант написания"
+                  className="h-7 rounded-md border border-border bg-transparent px-2 text-small"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={aliasDraft.trim() === "" || addAlias.isPending}
+                  onClick={() => {
+                    addAlias.mutate(aliasDraft.trim(), {
+                      onSuccess: () => {
+                        setAliasDraft("")
+                        setAliasOpen(false)
+                      },
+                    })
+                  }}
+                >
+                  Добавить
+                </Button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAliasOpen(true)}
+                className="inline-flex items-center gap-1 rounded-md border border-dashed border-border-strong px-2.5 py-1 text-small text-primary"
               >
-                Добавить
-              </Button>
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setAliasOpen(true)}
-              className="inline-flex items-center gap-1 rounded-md border border-dashed border-border-strong px-2.5 py-1 text-small text-primary"
-            >
-              <Plus className="size-3" aria-hidden />
-              вариант
-            </button>
-          )}
+                <Plus className="size-3" aria-hidden />
+                вариант
+              </button>
+            ))}
         </div>
       </section>
 
@@ -252,17 +290,21 @@ export function VendorCardScreen() {
               </>
             )}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled
-            className="gap-1.5"
-            title="в разработке"
-          >
-            <Merge className="size-3.5" aria-hidden />
-            Объединить
-            <span className="text-caption text-muted-foreground">· скоро</span>
-          </Button>
+          {editMode && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled
+              className="gap-1.5"
+              title="в разработке"
+            >
+              <Merge className="size-3.5" aria-hidden />
+              Объединить
+              <span className="text-caption text-muted-foreground">
+                · скоро
+              </span>
+            </Button>
+          )}
         </div>
       </section>
 
@@ -294,7 +336,13 @@ export function VendorCardScreen() {
           </div>
         ) : (
           <>
-            <Accordion type="multiple" className="mt-2.5">
+            <Accordion
+              type="multiple"
+              className="mt-2.5"
+              {...(editMode
+                ? { value: expanded, onValueChange: setExpanded }
+                : {})}
+            >
               {standards.map((s) => {
                 const count = `${s.position_count} ${pluralPositions(s.position_count)}`
                 const summary = standardAllClasses(s)

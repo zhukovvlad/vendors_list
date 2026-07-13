@@ -10,6 +10,7 @@ interface InlineEditTextProps {
   onEditStart?: () => void
   displayClassName?: string
   inputClassName?: string
+  readOnly?: boolean
 }
 
 /**
@@ -30,6 +31,7 @@ export function InlineEditText({
   onEditStart,
   displayClassName,
   inputClassName,
+  readOnly = false,
 }: InlineEditTextProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
@@ -68,6 +70,11 @@ export function InlineEditText({
     setEditing(false)
   }
 
+  if (readOnly) {
+    const empty = value.trim() === ""
+    if (empty) return null // в view пустое примечание не занимает место
+    return <span className={displayClassName}>{value}</span>
+  }
   if (!editing) {
     const empty = value.trim() === ""
     return (

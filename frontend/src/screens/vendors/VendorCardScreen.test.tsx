@@ -29,6 +29,58 @@ function renderAt(path = "/vendors/5") {
   )
 }
 
+async function enterEditMode() {
+  await userEvent.click(screen.getByRole("button", { name: "Редактировать" }))
+}
+
+describe("VendorCardScreen — режим правки", () => {
+  it("view по умолчанию: ноль affordance", async () => {
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    expect(
+      screen.getByRole("button", { name: "Редактировать" })
+    ).toBeInTheDocument()
+    // тумблер соглашения выключен/недоступен
+    expect(
+      screen.getByRole("switch", { name: "Соглашение о сотрудничестве" })
+    ).toBeDisabled()
+    // нет инлайн-кнопок правки, нет «×» на алиасах, нет «+ вариант»
+    expect(
+      screen.queryByRole("button", { name: "Редактировать имя" })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: /удалить/ })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: "вариант" })
+    ).not.toBeInTheDocument()
+  })
+
+  it("вход в edit: появляются affordance и баннер", async () => {
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode()
+    expect(screen.getByRole("button", { name: "Готово" })).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "Редактировать имя" })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("switch", { name: "Соглашение о сотрудничестве" })
+    ).not.toBeDisabled()
+    // дефолтная фикстура уже содержит легенду про «войдут в следующий релиз»
+    // (excluded-чип «Бизнес»), поэтому проверяем баннер по уникальной фразе
+    expect(screen.getByText(/применяются\s+немедленно/)).toBeInTheDocument()
+  })
+
+  it("вход в edit: все стандарты раскрыты", async () => {
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode()
+    // дефолтная фикстура: 1 стандарт «Жилой дом» → раскрыт (виден чип)
+    expect(await screen.findByText("Делюкс")).toBeInTheDocument()
+  })
+})
+
 describe("VendorCardScreen — шапка", () => {
   it("рисует имя, локализованный тип, пилюлю соглашения и статус бренда", async () => {
     renderAt()
@@ -54,6 +106,7 @@ describe("VendorCardScreen — шапка", () => {
     )
     renderAt()
     await screen.findByRole("heading", { level: 1 })
+    await enterEditMode()
     expect(
       screen.getByRole("button", { name: "Редактировать примечание" })
     ).toHaveTextContent("+ примечание")
@@ -293,6 +346,7 @@ describe("VendorCardScreen — мутации", () => {
     )
     renderAt()
     await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode()
     await userEvent.click(
       screen.getByRole("switch", { name: "Соглашение о сотрудничестве" })
     )
@@ -309,6 +363,7 @@ describe("VendorCardScreen — мутации", () => {
     )
     renderAt()
     await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode()
     await userEvent.click(screen.getByRole("button", { name: "вариант" }))
     await userEvent.type(
       screen.getByPlaceholderText("вариант написания"),
@@ -330,6 +385,7 @@ describe("VendorCardScreen — инлайн-правка шапки", () => {
     )
     renderAt()
     await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode()
     await userEvent.click(
       screen.getByRole("button", { name: "Редактировать имя" })
     )
@@ -349,6 +405,7 @@ describe("VendorCardScreen — инлайн-правка шапки", () => {
     )
     renderAt()
     await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode()
     await userEvent.click(
       screen.getByRole("button", { name: "Редактировать имя" })
     )
@@ -371,6 +428,7 @@ describe("VendorCardScreen — инлайн-правка шапки", () => {
     )
     renderAt()
     await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode()
     await userEvent.click(
       screen.getByRole("button", { name: "Редактировать примечание" })
     )
@@ -395,6 +453,7 @@ describe("VendorCardScreen — инлайн-правка шапки", () => {
     )
     renderAt()
     await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode()
     await userEvent.click(
       screen.getByRole("button", { name: "Редактировать примечание" })
     )
