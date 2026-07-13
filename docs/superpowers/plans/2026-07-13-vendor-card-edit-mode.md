@@ -19,7 +19,7 @@
 - **Две базовые миграции неизменны (golden-rule #5).** Новое — ТОЛЬКО новой ревизией чистым SQL через `op.execute` (`just makemigration name="..."`). autogenerate не используем.
 - **Пишущие эндпоинты — только `Depends(tx)` + `Depends(require_admin)`.** `tx` первым делом ставит `app.user` через `set_config(..., true)` ([db.py:60-73](../../../backend/app/db.py)); аудит подписывается верным логином. Роли — в API (golden-rule #4).
 - **Накат ревизии 0006 — и на боевую, и на тест-ветку.** `just migrate` (боевая) **и** `just migrate-test` (тест-ветка Neon). Память проекта: миграция только на тест-ветке молча падает 500 в живом приложении.
-- **Только семантические токены DS. Новых токенов НЕ заводить.** Акцент сводки «все классы» → `text-success` / `--ds-state-success` (mint, единственный цвет блока); баннер режима → subtle-violet (существующий акцент); sunken-полоса → `bg-muted`; делители → `border-border`/`border-border/60`; пунктир → `border-dashed border-border-strong`; фокус → `--ring`; destructive kebab → токен `destructive`.
+- **Только семантические токены DS. Новых токенов НЕ заводить.** Акцент сводки «все классы» → `text-mint` (`--color-mint`, реальный DS-токен; `text-success`/`--ds-state-success` в DS НЕ существует — поправлено при реализации, новых токенов не заводим); баннер режима → subtle-violet (существующий акцент); sunken-полоса → `bg-muted`; делители → `border-border`/`border-border/60`; пунктир → `border-dashed border-border-strong`; фокус → `--ring`; destructive kebab → токен `destructive`.
 - **DS `components/ui/accordion.tsx` НЕ форкаем.** Кастомный триггер — на `AccordionPrimitive.Trigger` из `radix-ui` (как уже в `VendorCardScreen.tsx`), состояние через `group-data-[state=open]`.
 - **UI только на русском.** Идентификаторы/код — по-английски.
 - **Типы сквозные:** после правки бэкенд-контракта — `just types` (регенерит `frontend/src/api/schema.d.ts`, **gitignored** — не коммитим).
@@ -1033,12 +1033,12 @@ import {
                         </span>
 ```
 
-3) **Сводка «все классы»** — тихая строка с mint-иконкой `CheckCheck` (`text-success`), НЕ контурный чип. Заменить ветку `isAllClasses(...) ? <Badge...>все классы</Badge>`:
+3) **Сводка «все классы»** — тихая строка с mint-иконкой `CheckCheck` (`text-mint`), НЕ контурный чип. Заменить ветку `isAllClasses(...) ? <Badge...>все классы</Badge>`:
 
 ```tsx
                             {isAllClasses(p, s.segment_count) ? (
                               <span className="flex items-center gap-1 text-caption text-muted-foreground">
-                                <CheckCheck className="size-3.5 text-success" aria-hidden />
+                                <CheckCheck className="size-3.5 text-mint" aria-hidden />
                                 все классы
                               </span>
                             ) : (
