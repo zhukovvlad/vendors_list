@@ -381,6 +381,9 @@ async def test_exclude_class_scale(client, as_admin, db_conn) -> None:
 
 
 async def test_exclude_position_scale(client, as_admin, db_conn) -> None:
+    """scope=position должен фильтровать классы ЧЕРЕЗ segment.building_type_id,
+    а не по одной лишь position_id: bt2 делит ту же позицию с bt1, но его класс
+    НЕ должен быть задет исключением, объявленным для bt1 (граница building_type)."""
     bt = await f.make_building_type(db_conn, code="exc-pos")
     s1 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-1", sort_order=1)
     s2 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-2", sort_order=2)
@@ -390,12 +393,21 @@ async def test_exclude_position_scale(client, as_admin, db_conn) -> None:
     await f.make_listing(db_conn, position_id=pos, segment_id=s1, vendor_id=v, status="allowed")
     await f.make_listing(db_conn, position_id=pos, segment_id=s2, vendor_id=v, status="allowed")
 
+    # bt2 делит ТУ ЖЕ позицию (pos), тот же вендор — его класс должен пережить
+    # исключение scope=position, объявленное для bt1.
+    bt2 = await f.make_building_type(db_conn, code="exc-pos-bt2")
+    s3 = await f.make_segment(db_conn, building_type_id=bt2, name="Кл-1-bt2", sort_order=1)
+    await f.make_listing(db_conn, position_id=pos, segment_id=s3, vendor_id=v, status="allowed")
+
     resp = await client.post(
         f"/vendors/{v}/listings/exclude",
         json={"scope": "position", "position_id": pos, "building_type_id": bt},
     )
     assert resp.status_code == 200
+    # масштаб не изменился из-за bt2 — исключены ровно 2 класса bt1, не 3
     assert resp.json() == {"excluded_positions": 1, "excluded_classes": 2}
+    # bt2-класс пережил исключение bt1: осталась ровно 1 живая ячейка (s3)
+    assert await _live_cell_count(db_conn, v) == 1
 
 
 async def test_exclude_standard_scale(client, as_admin, db_conn) -> None:
@@ -468,6 +480,26 @@ async def test_restore_insert_branch(client, as_admin, db_conn) -> None:
     )
     assert resp.status_code == 204
     assert await _live_cell_count(db_conn, v) == 1
+
+
+async def test_restore_meta_row_conflict_409(client, as_admin, db_conn) -> None:
+    """restore разделяет _add_one_class с add — тот же P0001→409 путь на живой
+    мета-строке в ячейке; фиксируем контракт явным тестом (зеркало
+    test_add_listings_meta_row_conflict_409)."""
+    bt = await f.make_building_type(db_conn, code="res-409")
+    s1 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-1", sort_order=1)
+    cat = await f.make_category(db_conn, name="res-409-cat")
+    pos = await f.make_position(db_conn, category_id=cat, name="res-409-pos")
+    v = await f.make_vendor(db_conn, name="res-409-v")
+    # живая мета-строка (requirement) в ячейке → восстановить вендора нельзя
+    await f.make_listing(
+        db_conn, position_id=pos, segment_id=s1, vendor_id=None, status="requirement", spec_text="Россия"
+    )
+
+    resp = await client.post(
+        f"/vendors/{v}/listings/restore", json={"position_id": pos, "segment_id": s1}
+    )
+    assert resp.status_code == 409
 
 
 async def test_patch_kind(client, as_admin, db_conn) -> None:
