@@ -46,11 +46,12 @@ def pytest_collection_modifyitems(
             item.add_marker(skip_db)
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def engine() -> AsyncIterator[AsyncEngine]:
-    """Движок на тестовую ветку. NullPool — не держим соединения между тестами,
-    заодно уходим от привязки пула к событийному циклу. statement_cache_size=0 —
-    обязателен под транзакционный пулер Neon (как в app/db.py)."""
+    """Движок на тестовую ветку — ОДИН на сессию (единый event loop, см. pyproject).
+    NullPool: пул нам не нужен — держим единственное живое соединение сами
+    (`_shared_conn`). statement_cache_size=0 обязателен под транзакционный пулер
+    Neon (как в app/db.py)."""
     eng = create_async_engine(
         TEST_DB_URL,
         poolclass=NullPool,
@@ -60,15 +61,25 @@ async def engine() -> AsyncIterator[AsyncEngine]:
     await eng.dispose()
 
 
-@pytest_asyncio.fixture
-async def db_conn(engine: AsyncEngine) -> AsyncIterator[AsyncConnection]:
-    """Соединение в откатываемой транзакции: всё, что тест пишет, исчезает в конце."""
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def _shared_conn(engine: AsyncEngine) -> AsyncIterator[AsyncConnection]:
+    """Одно физическое соединение на всю сессию — платим хендшейк к Neon один раз.
+    Изоляцию между тестами даёт `db_conn` (своя транзакция на тест, откатывается);
+    само соединение переиспользуется."""
     async with engine.connect() as conn:
-        trans = await conn.begin()
-        try:
-            yield conn
-        finally:
-            await trans.rollback()
+        yield conn
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def db_conn(_shared_conn: AsyncConnection) -> AsyncIterator[AsyncConnection]:
+    """Тест в собственной верхнеуровневой транзакции на общем соединении: всё, что
+    тест пишет, откатывается в конце. Соединение НЕ переоткрывается (session-scoped),
+    новая транзакция начинается на уже установленном соединении."""
+    trans = await _shared_conn.begin()
+    try:
+        yield _shared_conn
+    finally:
+        await trans.rollback()
 
 
 @pytest_asyncio.fixture

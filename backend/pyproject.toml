@@ -58,6 +58,14 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Единый event loop на всю тест-сессию: позволяет держать ОДНО соединение к БД
+# на сессию (см. conftest.py — session-scoped engine/connection), а не открывать
+# новое на каждый тест. Против удалённого Neon это убирает ~N хендшейков и режет
+# локальный прогон в разы (CI-раннер рядом с Neon, там эффект мал). Fixture- и
+# test-loop ОБА должны быть session — иначе connection, созданный на session-loop,
+# не доступен из function-loop теста ("attached to a different loop").
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
