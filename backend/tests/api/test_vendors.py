@@ -532,6 +532,17 @@ async def test_patch_kind_invalid_422(client, as_admin, db_conn) -> None:
     assert resp.status_code == 422
 
 
+async def test_patch_kind_explicit_null_422(client, as_admin, db_conn) -> None:
+    # kind — NOT NULL: явный null отклоняется валидатором (422), а не доходит до
+    # UPDATE ... SET kind = NULL (иначе 500). «Поле не пришло» этим не задето.
+    v = await f.make_vendor(db_conn, name="kind-null-v", kind="supplier")
+    resp = await client.patch(f"/vendors/{v}", json={"kind": None})
+    assert resp.status_code == 422
+    # значение не изменилось
+    resp2 = await client.get(f"/vendors/{v}")
+    assert resp2.json()["kind"] == "supplier"
+
+
 async def test_listing_mutations_rbac_viewer_403(client, as_viewer, db_conn) -> None:
     v = await f.make_vendor(db_conn, name="rbac-v")
     r1 = await client.post(f"/vendors/{v}/listings", json={"position_id": 1, "segment_ids": [1]})

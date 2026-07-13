@@ -314,8 +314,14 @@ class VendorHeaderUpdate(BaseModel):
 
     @field_validator("kind")
     @classmethod
-    def _kind_in_enum(cls, v: str | None) -> str | None:
-        if v is not None and v not in _VENDOR_KINDS:
+    def _kind_in_enum(cls, v: str | None) -> str:
+        # kind — NOT NULL в БД. «Поле не пришло» (default None, валидатор не
+        # вызывается) отличаем от «kind: null» (валидатор вызван с None): явный
+        # null недопустим, иначе model_dump(exclude_unset) пронёс бы его в
+        # UPDATE ... SET kind = NULL → нарушение NOT NULL → 500. Отклоняем → 422.
+        if v is None:
+            raise ValueError("Тип вендора не может быть пустым")
+        if v not in _VENDOR_KINDS:
             raise ValueError("Недопустимый тип вендора")
         return v
 
