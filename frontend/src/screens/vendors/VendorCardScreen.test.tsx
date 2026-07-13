@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest"
 import { ThemeProvider } from "@/components/theme-provider"
 import { routeTree } from "@/router"
 import { server } from "@/test/msw/server"
-import { vendorFixture } from "@/test/msw/handlers"
+import { vendorFixture, whereAllowedFixture } from "@/test/msw/handlers"
 
 function renderAt(path = "/vendors/5") {
   const router = createRouter({
@@ -27,6 +27,7 @@ function renderAt(path = "/vendors/5") {
       </ThemeProvider>
     </QueryClientProvider>
   )
+  return qc
 }
 
 async function enterEditMode() {
@@ -77,6 +78,25 @@ describe("VendorCardScreen — режим правки", () => {
     await screen.findByRole("heading", { level: 1, name: /System Air/ })
     await enterEditMode()
     // дефолтная фикстура: 1 стандарт «Жилой дом» → раскрыт (виден чип)
+    expect(await screen.findByText("Делюкс")).toBeInTheDocument()
+  })
+
+  it("вход в edit ДО загрузки where-allowed: секции раскрываются после прихода данных", async () => {
+    // Вендор (шапка+кнопка) грузится сразу, where-allowed держим «в пути»
+    // (никогда не отвечающий хендлер) → вход в edit при standards=[]. Затем
+    // имитируем приход дерева через кэш и ждём авто-раскрытия секций.
+    server.use(
+      http.get(
+        "/api/vendors/:vendorId/where-allowed",
+        () => new Promise<never>(() => {}) // никогда не резолвится
+      )
+    )
+    const qc = renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode() // стандарты ещё не пришли
+    // дерево приходит уже в edit-режиме
+    qc.setQueryData(["vendor-where-allowed", 5], whereAllowedFixture)
+    // секция раскрыта: контент смонтирован (чип виден)
     expect(await screen.findByText("Делюкс")).toBeInTheDocument()
   })
 })

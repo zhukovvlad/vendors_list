@@ -219,7 +219,11 @@ export function VendorCardScreen() {
   const [aliasDraft, setAliasDraft] = useState("")
   const [nameError, setNameError] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
-  const [expanded, setExpanded] = useState<string[]>([])
+  // Секции «Где разрешён» в edit раскрыты по умолчанию — храним лишь то, что
+  // пользователь ЯВНО свернул. «Раскрыто разом» тогда производно от данных
+  // (value пересчитывается, когда стандарты приезжают после входа в edit —
+  // кнопка правки видна раньше, чем грузится where-allowed), без seed-эффекта и гонок.
+  const [collapsed, setCollapsed] = useState<string[]>([])
   const [excludeDialog, setExcludeDialog] = useState<ExcludeDialogState | null>(
     null
   )
@@ -273,6 +277,7 @@ export function VendorCardScreen() {
     )
 
   const standards = whereAllowed.data?.standards ?? []
+  const allStandardIds = standards.map((s) => String(s.building_type_id))
   const positionTotal = standards.reduce((a, s) => a + s.position_count, 0)
   const presentStandards = new Set(standards.map((s) => s.building_type_id))
   const allStandardsPresent =
@@ -308,8 +313,10 @@ export function VendorCardScreen() {
           size="sm"
           className="gap-1.5"
           onClick={() => {
-            if (!editMode)
-              setExpanded(standards.map((s) => String(s.building_type_id)))
+            // Разрешаем эффекту засеять раскрытие для новой сессии правки;
+            // само раскрытие — в эффекте (устойчиво к ещё не пришедшим стандартам).
+            // Новая сессия правки — сбрасываем свёрнутое (все секции раскрыты).
+            if (!editMode) setCollapsed([])
             setEditMode((v) => !v)
           }}
         >
@@ -587,7 +594,14 @@ export function VendorCardScreen() {
               type="multiple"
               className="mt-2.5"
               {...(editMode
-                ? { value: expanded, onValueChange: setExpanded }
+                ? {
+                    // Раскрыто = все секции минус явно свёрнутые (производно от данных).
+                    value: allStandardIds.filter((v) => !collapsed.includes(v)),
+                    onValueChange: (open: string[]) =>
+                      setCollapsed(
+                        allStandardIds.filter((v) => !open.includes(v))
+                      ),
+                  }
                 : {})}
             >
               {standards.map((s) => {
