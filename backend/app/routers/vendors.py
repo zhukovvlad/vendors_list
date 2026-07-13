@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from ..auth import CurrentUser, require_admin, require_user
@@ -17,6 +17,10 @@ from ..db import read_conn, tx
 from ..schemas import (
     AgreementToggle,
     AliasCreate,
+    ListingAdd,
+    ListingExclude,
+    ListingExcludeResult,
+    ListingRestore,
     VendorAlias,
     VendorCard,
     VendorHeaderUpdate,
@@ -160,6 +164,67 @@ async def _ensure_vendor(conn: AsyncConnection, vendor_id: int) -> None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Вендор не найден")
 
 
+def _is_cell_chk(exc: DBAPIError) -> bool:
+    """listing_cell_chk поднимает RAISE EXCEPTION (SQLSTATE P0001), не нарушение
+    ограничения — это НЕ IntegrityError. Распознаём по sqlstate оригинала asyncpg."""
+    return getattr(getattr(exc, "orig", None), "sqlstate", None) == "P0001"
+
+
+async def _segment_building_type(conn: AsyncConnection, segment_id: int) -> int:
+    bt = (
+        await conn.execute(
+            text("SELECT building_type_id FROM segment WHERE id = :s"), {"s": segment_id}
+        )
+    ).scalar_one_or_none()
+    if bt is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Класс не найден")
+    return int(bt)
+
+
+async def _add_one_class(
+    conn: AsyncConnection, vendor_id: int, position_id: int, segment_id: int
+) -> bool:
+    """Один класс: если уже жив — no-op (idempotent), возвращает False; иначе
+    un-delete последней soft-deleted строки (чистим и deleted_by, чтобы ожившая
+    строка не унесла устаревшего удалившего), иначе INSERT allowed — возвращает True
+    (реальное изменение → вызывающий создаст open-маркер). Мета-строка в ячейке → 409."""
+    live = (
+        await conn.execute(
+            text(
+                "SELECT 1 FROM listing WHERE position_id = :p AND segment_id = :s "
+                "AND vendor_id = :v AND deleted_at IS NULL"
+            ),
+            {"p": position_id, "s": segment_id, "v": vendor_id},
+        )
+    ).scalar_one_or_none()
+    if live is not None:
+        return False  # уже живой — no-op, маркер релиза не нужен
+    try:
+        res = await conn.execute(
+            text(
+                "UPDATE listing SET deleted_at = NULL, deleted_by = NULL WHERE id = ("
+                "  SELECT id FROM listing WHERE position_id = :p AND segment_id = :s "
+                "  AND vendor_id = :v AND deleted_at IS NOT NULL ORDER BY id DESC LIMIT 1)"
+            ),
+            {"p": position_id, "s": segment_id, "v": vendor_id},
+        )
+        if res.rowcount == 0:
+            await conn.execute(
+                text(
+                    "INSERT INTO listing (position_id, segment_id, vendor_id, status) "
+                    "VALUES (:p, :s, :v, 'allowed')"
+                ),
+                {"p": position_id, "s": segment_id, "v": vendor_id},
+            )
+        return True  # ожил (un-delete) ЛИБО вставлен — реальное изменение
+    except DBAPIError as exc:
+        if _is_cell_chk(exc):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, "Ячейка содержит требование/прочерк — сначала уберите мета-строку"
+            ) from exc
+        raise
+
+
 @router.put("/{vendor_id}/agreement")
 async def toggle_agreement(
     vendor_id: int,
@@ -289,6 +354,12 @@ async def update_vendor_header(
             {"note": note, "id": vendor_id},
         )
 
+    if "kind" in data:
+        await conn.execute(
+            text("UPDATE vendor SET kind = :k WHERE id = :id"),
+            {"k": data["kind"], "id": vendor_id},
+        )
+
     return await _load_vendor_card(conn, vendor_id)
 
 
@@ -305,4 +376,99 @@ async def remove_alias(
     )
     if res.rowcount == 0:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Вариант написания не найден")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{vendor_id}/listings", status_code=status.HTTP_204_NO_CONTENT)
+async def add_listings(
+    vendor_id: int,
+    body: ListingAdd,
+    _admin: CurrentUser = Depends(require_admin),
+    conn: AsyncConnection = Depends(tx),
+) -> Response:
+    """Добавить вендора в позицию по классам. Общий для «+ класс»/«+ позиция»/«+ стандарт».
+    Порядок блокировок listing → release ЕДИНЫЙ во всех мутациях (без дедлока при
+    конкурентной правке одного типа): сперва пишем в listing, ensure_open_release —
+    ПОСЛЕ и только если хоть один класс реально ожил (no-op не плодит фантомный
+    черновик на дашборде, O2)."""
+    await _ensure_vendor(conn, vendor_id)
+    bt = await _segment_building_type(conn, body.segment_ids[0])
+    changed = False
+    for seg in body.segment_ids:
+        if await _add_one_class(conn, vendor_id, body.position_id, seg):
+            changed = True
+    if changed:
+        await conn.execute(text("SELECT ensure_open_release(:bt)"), {"bt": bt})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{vendor_id}/listings/exclude", response_model=ListingExcludeResult)
+async def exclude_listings(
+    vendor_id: int,
+    body: ListingExclude,
+    _admin: CurrentUser = Depends(require_admin),
+    conn: AsyncConnection = Depends(tx),
+) -> ListingExcludeResult:
+    """Soft-delete вендора по scope (class/position/standard); deleted_by/аудит
+    проставят триггеры. Порядок listing → release (как в add/restore): soft-delete
+    СНАЧАЛА, ensure_open_release — ПОСЛЕ и только если реально исключили строки
+    (rowcount>0; no-op не создаёт фантомный черновик, O2). Возвращает ФАКТИЧЕСКИЙ
+    масштаб (для тоста/сверки; клиентский предрасчёт — только для мгновенного диалога)."""
+    await _ensure_vendor(conn, vendor_id)
+    bt: int
+    if body.scope == "class":
+        assert body.segment_id is not None  # гарантировано валидатором
+        bt = await _segment_building_type(conn, body.segment_id)
+    else:
+        raw_bt = body.building_type_id
+        assert raw_bt is not None  # гарантировано валидатором
+        bt = raw_bt
+
+    if body.scope == "class":
+        sql = (
+            "UPDATE listing SET deleted_at = now() "
+            "WHERE vendor_id = :v AND position_id = :p AND segment_id = :s "
+            "AND deleted_at IS NULL RETURNING position_id"
+        )
+        params: dict[str, object] = {"v": vendor_id, "p": body.position_id, "s": body.segment_id}
+    elif body.scope == "position":
+        sql = (
+            "UPDATE listing SET deleted_at = now() "
+            "WHERE vendor_id = :v AND position_id = :p AND deleted_at IS NULL "
+            "AND segment_id IN (SELECT id FROM segment WHERE building_type_id = :bt) "
+            "RETURNING position_id"
+        )
+        params = {"v": vendor_id, "p": body.position_id, "bt": bt}
+    else:  # standard
+        sql = (
+            "UPDATE listing SET deleted_at = now() "
+            "WHERE vendor_id = :v AND deleted_at IS NULL "
+            "AND segment_id IN (SELECT id FROM segment WHERE building_type_id = :bt) "
+            "RETURNING position_id"
+        )
+        params = {"v": vendor_id, "bt": bt}
+
+    pos_ids = (await conn.execute(text(sql), params)).scalars().all()
+    if pos_ids:  # rowcount>0 → реальное изменение → создаём/переиспользуем open-маркер
+        await conn.execute(text("SELECT ensure_open_release(:bt)"), {"bt": bt})
+    return ListingExcludeResult(
+        excluded_classes=len(pos_ids),
+        excluded_positions=len(set(pos_ids)),
+    )
+
+
+@router.post("/{vendor_id}/listings/restore", status_code=status.HTTP_204_NO_CONTENT)
+async def restore_listing(
+    vendor_id: int,
+    body: ListingRestore,
+    _admin: CurrentUser = Depends(require_admin),
+    conn: AsyncConnection = Depends(tx),
+) -> Response:
+    """«Вернуть» один класс: un-delete-first-else-INSERT (O1). Порядок listing →
+    release (как в add/exclude): сперва оживляем класс, ensure_open_release — ПОСЛЕ и
+    только если реально изменили (уже-живой класс = no-op). Конфликт с мета-строкой → 409."""
+    await _ensure_vendor(conn, vendor_id)
+    bt = await _segment_building_type(conn, body.segment_id)
+    if await _add_one_class(conn, vendor_id, body.position_id, body.segment_id):
+        await conn.execute(text("SELECT ensure_open_release(:bt)"), {"bt": bt})
     return Response(status_code=status.HTTP_204_NO_CONTENT)
