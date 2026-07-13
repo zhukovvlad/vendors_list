@@ -320,6 +320,35 @@ async def test_add_listings_insert_branch(client, as_admin, db_conn) -> None:
     ).scalar_one() == 1
 
 
+async def test_add_listings_mixed_building_types_422(client, as_admin, db_conn) -> None:
+    # Сегменты из РАЗНЫХ типов объекта → 422, без частичной записи (open-маркер
+    # ставится один; смешанный запрос оставил бы второй тип без маркера).
+    bt1 = await f.make_building_type(db_conn, code="add-mix1")
+    bt2 = await f.make_building_type(db_conn, code="add-mix2")
+    s1 = await f.make_segment(db_conn, building_type_id=bt1, name="Кл-1", sort_order=1)
+    s2 = await f.make_segment(db_conn, building_type_id=bt2, name="Кл-2", sort_order=1)
+    cat = await f.make_category(db_conn, name="add-mix-cat")
+    pos = await f.make_position(db_conn, category_id=cat, name="add-mix-pos")
+    v = await f.make_vendor(db_conn, name="add-mix-v")
+
+    resp = await client.post(
+        f"/vendors/{v}/listings", json={"position_id": pos, "segment_ids": [s1, s2]}
+    )
+    assert resp.status_code == 422
+    # ни одной живой строки не записано, ни одного open-маркера не создано
+    assert await _live_cell_count(db_conn, v) == 0
+    for bt in (bt1, bt2):
+        assert (
+            await db_conn.execute(
+                text(
+                    "SELECT count(*) FROM release "
+                    "WHERE building_type_id = :bt AND status = 'open'"
+                ),
+                {"bt": bt},
+            )
+        ).scalar_one() == 0
+
+
 async def test_add_listings_undelete_branch_no_history(client, as_admin, db_conn) -> None:
     bt = await f.make_building_type(db_conn, code="add-und")
     s1 = await f.make_segment(db_conn, building_type_id=bt, name="Кл-1", sort_order=1)

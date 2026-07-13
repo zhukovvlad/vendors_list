@@ -391,9 +391,21 @@ async def add_listings(
     Порядок блокировок listing → release ЕДИНЫЙ во всех мутациях (без дедлока при
     конкурентной правке одного типа): сперва пишем в listing, ensure_open_release —
     ПОСЛЕ и только если хоть один класс реально ожил (no-op не плодит фантомный
-    черновик на дашборде, O2)."""
+    черновик на дашборде, O2).
+
+    Все сегменты обязаны принадлежать ОДНОМУ типу объекта: open-маркер ставится один
+    (на этот тип), а смешанный запрос отметил бы черновиком лишь первый тип, оставив
+    правки прочих типов без маркера. Разрешаем все сегменты заранее и отклоняем микс (422)."""
     await _ensure_vendor(conn, vendor_id)
-    bt = await _segment_building_type(conn, body.segment_ids[0])
+    building_types = {
+        await _segment_building_type(conn, seg) for seg in body.segment_ids
+    }
+    if len(building_types) != 1:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Все классы должны относиться к одному типу объекта",
+        )
+    bt = building_types.pop()
     changed = False
     for seg in body.segment_ids:
         if await _add_one_class(conn, vendor_id, body.position_id, seg):
