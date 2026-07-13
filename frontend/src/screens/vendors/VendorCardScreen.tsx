@@ -1,7 +1,15 @@
 import { useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { Accordion as AccordionPrimitive } from "radix-ui"
-import { Award, ChevronRight, Merge, Plus, Star, X } from "lucide-react"
+import {
+  Award,
+  CheckCheck,
+  ChevronRight,
+  Merge,
+  Plus,
+  Star,
+  X,
+} from "lucide-react"
 
 import {
   useAddAlias,
@@ -30,6 +38,7 @@ import {
   pluralPositions,
   pluralStandards,
   pluralVendors,
+  splitQualifier,
   standardAllClasses,
   WHERE_ALLOWED_EMPTY,
   whereAllowedLegend,
@@ -303,10 +312,10 @@ export function VendorCardScreen() {
                           aria-hidden
                           className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90 group-data-[state=open]:text-primary"
                         />
-                        <span className="flex-1 text-small font-medium">
+                        <span className="flex-1 text-small font-medium tracking-tight text-muted-foreground group-data-[state=open]:text-foreground">
                           {s.building_type_name}
                         </span>
-                        <span className="text-caption text-muted-foreground">
+                        <span className="text-caption text-muted-foreground uppercase">
                           {summary}
                         </span>
                       </AccordionPrimitive.Trigger>
@@ -318,16 +327,32 @@ export function VendorCardScreen() {
                             key={p.position_id}
                             className="flex flex-wrap items-center gap-x-2 gap-y-1.5 py-2"
                           >
-                            <span className="flex-1 text-small">
-                              {p.position_name}
+                            <span className="flex-1 text-small text-foreground">
+                              {(() => {
+                                const { head, qualifier } = splitQualifier(
+                                  p.position_name
+                                )
+                                return (
+                                  <>
+                                    {head}
+                                    {qualifier && (
+                                      <span className="text-muted-foreground">
+                                        {" "}
+                                        ({qualifier})
+                                      </span>
+                                    )}
+                                  </>
+                                )
+                              })()}
                             </span>
                             {isAllClasses(p, s.segment_count) ? (
-                              <Badge
-                                variant="outline"
-                                className="text-muted-foreground"
-                              >
+                              <span className="flex items-center gap-1 text-caption text-muted-foreground">
+                                <CheckCheck
+                                  className="text-success size-3.5"
+                                  aria-hidden
+                                />
                                 все классы
-                              </Badge>
+                              </span>
                             ) : (
                               <div className="flex w-full flex-wrap gap-1.5">
                                 {p.chips.map((c) =>
@@ -368,7 +393,7 @@ export function VendorCardScreen() {
                 <span className="rounded-sm border border-dashed border-border-strong px-1.5 line-through">
                   класс
                 </span>
-                — был в последнем релизе, исключён · {whereAllowedLegend()}
+                — исключён, войдёт в следующий релиз · {whereAllowedLegend()}
               </p>
             ) : (
               <p className="mt-3 px-5 text-caption text-muted-foreground">

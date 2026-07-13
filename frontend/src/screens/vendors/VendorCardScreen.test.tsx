@@ -93,7 +93,7 @@ describe("VendorCardScreen — Где разрешён", () => {
     // тултип/aria исключённого чипа несёт label релиза
     expect(excluded).toHaveAttribute(
       "aria-label",
-      "Был в релизе «ред. 25.03.2026», исключён в текущем черновике"
+      "Был в релизе «ред. 25.03.2026», исключён — войдёт в следующий релиз"
     )
   })
 
@@ -146,7 +146,7 @@ describe("VendorCardScreen — Где разрешён", () => {
     renderAt()
     await screen.findByRole("heading", { level: 1, name: /System Air/ })
     expect(
-      await screen.findByText("показано текущее состояние стандартов")
+      await screen.findByText(/исключения войдут в следующий релиз/)
     ).toBeInTheDocument()
     expect(screen.queryByText(/зачёркнутый класс/)).not.toBeInTheDocument()
   })
@@ -242,8 +242,43 @@ describe("VendorCardScreen — Где разрешён", () => {
     renderAt() // дефолтная фикстура содержит excluded «Бизнес»
     await screen.findByRole("heading", { level: 1, name: /System Air/ })
     expect(
-      await screen.findByText(/был в последнем релизе, исключён/)
+      await screen.findByText(/исключён, войдёт в следующий релиз/)
     ).toBeInTheDocument()
+  })
+
+  it("уточнение позиции в скобках приглушено (split)", async () => {
+    server.use(
+      http.get("/api/vendors/:vendorId/where-allowed", () =>
+        HttpResponse.json({
+          standards: [
+            {
+              building_type_id: 1,
+              building_type_name: "Жилой дом",
+              position_count: 1,
+              segment_count: 2,
+              positions: [
+                {
+                  position_id: 100,
+                  position_name: "Насосы (EC двигатель)",
+                  chips: [
+                    {
+                      segment_id: 11,
+                      segment_name: "Делюкс",
+                      state: "allowed",
+                      release_label: null,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        })
+      )
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await userEvent.click(screen.getByRole("button", { name: /Жилой дом/ }))
+    expect(await screen.findByText("(EC двигатель)")).toBeInTheDocument()
   })
 })
 

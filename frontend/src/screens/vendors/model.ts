@@ -44,11 +44,11 @@ export function avatarInitial(name: string): string {
   return ch ? ch.toUpperCase() : "?"
 }
 
-/** Тултип зачёркнутого чипа: релиз идентифицируется label, не номером версии. */
+/** Тултип зачёркнутого чипа: релиз идентифицируется label. Язык — «войдёт в следующий релиз». */
 export function excludedTooltip(releaseLabel: string | null): string {
   return releaseLabel
-    ? `Был в релизе «${releaseLabel}», исключён в текущем черновике`
-    : "Был в последнем релизе, исключён в текущем черновике"
+    ? `Был в релизе «${releaseLabel}», исключён — войдёт в следующий релиз`
+    : "Был в последнем релизе, исключён — войдёт в следующий релиз"
 }
 
 /** Пометка пустого обратного индекса: вендор нигде не разрешён сейчас. */
@@ -95,11 +95,62 @@ export function standardAllClasses(standard: CoverageStandard): boolean {
 }
 
 /**
- * Базовая легенда под деревом «Где разрешён» («показано текущее состояние
- * стандартов»). Вариант с пояснением про зачёркивание рендерится инлайн в
- * компоненте (с визуальным образцом-чипом), когда в выборке есть исключённый
- * класс, — поэтому здесь только базовый текст.
+ * Базовая легенда под деревом «Где разрешён». Вариант с образцом-чипом (при
+ * наличии excluded) рендерится инлайн в компоненте — здесь базовый текст.
  */
 export function whereAllowedLegend(): string {
-  return "показано текущее состояние стандартов"
+  return "исключения войдут в следующий релиз; текущие релизы не затрагиваются"
+}
+
+/**
+ * Делит имя позиции на «голову» и уточнение в скобках для презентации (первая
+ * открывающая скобка). «Насосы (EC двигатель)» → {head:"Насосы", qualifier:"EC двигатель"}.
+ * Нет скобки → qualifier=null. Презентационно, НЕ парсер данных.
+ */
+export function splitQualifier(name: string): {
+  head: string
+  qualifier: string | null
+} {
+  const i = name.indexOf("(")
+  if (i === -1) return { head: name.trim(), qualifier: null }
+  const head = name.slice(0, i).trim()
+  const rest = name.slice(i + 1)
+  const close = rest.lastIndexOf(")")
+  const qualifier = (close === -1 ? rest : rest.slice(0, close)).trim()
+  return { head: head || name.trim(), qualifier: qualifier || null }
+}
+
+/** Масштаб исключения по позиции для диалога (клиентский предрасчёт из дерева). */
+export function excludeScaleForPosition(position: PositionLike): {
+  positions: number
+  classes: number
+} {
+  const classes = position.chips.filter((c) => c.state === "allowed").length
+  return { positions: classes > 0 ? 1 : 0, classes }
+}
+
+/** Масштаб исключения по стандарту для диалога (клиентский предрасчёт из дерева). */
+export function excludeScaleForStandard(standard: {
+  positions: PositionLike[]
+}): {
+  positions: number
+  classes: number
+} {
+  let positions = 0
+  let classes = 0
+  for (const p of standard.positions) {
+    const c = p.chips.filter((x) => x.state === "allowed").length
+    if (c > 0) positions++
+    classes += c
+  }
+  return { positions, classes }
+}
+
+/** Русское склонение «класс» по числу. */
+export function pluralClasses(n: number): string {
+  const m10 = n % 10
+  const m100 = n % 100
+  if (m10 === 1 && m100 !== 11) return "класс"
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return "класса"
+  return "классов"
 }
