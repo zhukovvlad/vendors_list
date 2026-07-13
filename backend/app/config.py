@@ -17,6 +17,46 @@ class Settings(BaseSettings):
     # Sync-URL для Alembic выводится из неё (см. database_url_sync). База одна.
     database_url: str = "postgresql+asyncpg://vendors:vendors@localhost:5432/vendors"
 
+    @field_validator("database_url", mode="after")
+    @classmethod
+    def _normalize_url(cls, v: str) -> str:
+        """Привести DATABASE_URL к async-виду (asyncpg), сохранив локальный без-SSL случай.
+
+        Кнопка «copy connection string» в Neon отдаёт libpq-URI
+        (postgresql://…?sslmode=require&channel_binding=require) — без тега драйвера
+        и с параметрами, которые asyncpg НЕ понимает (падает `unexpected keyword
+        'sslmode'`). Вставленный как есть в .env, такой URL роняет async-приложение и
+        сид (миграции живы — Alembic идёт через sync-psycopg, ему sslmode родной).
+
+        В отличие от тест-URL (всегда Neon → безусловный ssl=require), боевой
+        DATABASE_URL бывает и локальным (…@localhost без SSL), поэтому ssl НЕ
+        навязываем. Трогаем только то, что ломает asyncpg, и только если оно есть:
+        схема → postgresql+asyncpg; `sslmode=…` → `ssl=…`; `channel_binding=…`
+        выкидываем. URL без ssl-параметров (localhost) остаётся без SSL. Идемпотентно.
+        """
+        if not v:
+            return v
+        _, sep, rest = v.partition("://")
+        if not sep:
+            return v  # не похоже на URL — не трогаем
+        authority_path, q, query = rest.partition("?")
+        base = f"postgresql+asyncpg://{authority_path}"
+        if not q:
+            return base
+        params: list[str] = []
+        for kv in query.split("&"):
+            if not kv:
+                continue
+            key, _, val = kv.partition("=")
+            k = key.lower()
+            if k == "sslmode":
+                params.append(f"ssl={val}")
+            elif k == "channel_binding":
+                continue  # asyncpg не принимает
+            else:
+                params.append(kv)
+        return base + ("?" + "&".join(params) if params else "")
+
     # Тестовая ветка Neon (data+schema). Пусто в prod/обычном dev; задаётся
     # в backend/.env локально и в env CI-джобы. Драйвер asyncpg → хвост ssl=require.
     database_url_test: str = ""
