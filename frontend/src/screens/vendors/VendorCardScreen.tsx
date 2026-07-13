@@ -1,11 +1,14 @@
 import { useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { Accordion as AccordionPrimitive } from "radix-ui"
+import { toast } from "sonner"
 import {
   Award,
   Check,
   CheckCheck,
   ChevronRight,
+  CircleMinus,
+  Ellipsis,
   Merge,
   Pencil,
   Plus,
@@ -15,7 +18,11 @@ import {
 
 import {
   useAddAlias,
+  useAddListings,
+  useExcludeListings,
   useRemoveAlias,
+  useRestoreListing,
+  useSegments,
   useToggleAgreement,
   useUpdateVendorHeader,
   useVendor,
@@ -28,15 +35,33 @@ import {
 } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
 import { vendorCardRoute } from "@/router"
 
+import { ExcludeDialog } from "./ExcludeDialog"
+import { InlineEditText } from "./InlineEditText"
 import {
   avatarInitial,
   excludedTooltip,
+  excludeScaleForPosition,
+  excludeScaleForStandard,
   hasExcludedChips,
   isAllClasses,
+  KIND_LABELS,
   kindLabel,
+  pluralClasses,
   pluralPositions,
   pluralStandards,
   pluralVendors,
@@ -45,9 +70,97 @@ import {
   WHERE_ALLOWED_EMPTY,
   whereAllowedLegend,
 } from "./model"
-import { InlineEditText } from "./InlineEditText"
 
 const CARD = "rounded-xl border border-border bg-card"
+
+type ExcludeBody = {
+  scope: "class" | "position" | "standard"
+  position_id?: number
+  segment_id?: number
+  building_type_id?: number
+}
+
+type ExcludeDialogState = {
+  title: string
+  scale: { positions: number; classes: number }
+  body: ExcludeBody
+}
+
+/**
+ * «+ класс» на конце ряда позиции: Popover со списком сегментов типа, которых
+ * ещё нет среди чипов позиции (ни allowed, ни excluded). Каждый экземпляр — свой
+ * `useSegments` (хук в компоненте, не в цикле рендера родителя — валидно per instance).
+ */
+function AddClassPopover({
+  buildingTypeId,
+  presentSegmentIds,
+  pending,
+  onAdd,
+}: {
+  buildingTypeId: number
+  presentSegmentIds: Set<number>
+  pending: boolean
+  onAdd: (segmentIds: number[]) => void
+}) {
+  const segments = useSegments(buildingTypeId)
+  const [open, setOpen] = useState(false)
+  const [checked, setChecked] = useState<number[]>([])
+  const missing = (segments.data ?? []).filter(
+    (s) => !presentSegmentIds.has(s.id)
+  )
+
+  if (missing.length === 0) return null
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) setChecked([])
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded-md border border-dashed border-border-strong px-2 py-0.5 text-caption text-primary"
+        >
+          <Plus className="size-3" aria-hidden />
+          класс
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56">
+        <div className="flex flex-col gap-1.5">
+          {missing.map((s) => (
+            <label key={s.id} className="flex items-center gap-2 text-small">
+              <Checkbox
+                checked={checked.includes(s.id)}
+                onCheckedChange={(next) =>
+                  setChecked((prev) =>
+                    next === true
+                      ? [...prev, s.id]
+                      : prev.filter((id) => id !== s.id)
+                  )
+                }
+              />
+              {s.name}
+            </label>
+          ))}
+        </div>
+        <Button
+          size="sm"
+          disabled={checked.length === 0 || pending}
+          onClick={() => {
+            onAdd(checked)
+            setChecked([])
+            setOpen(false)
+          }}
+        >
+          Добавить
+        </Button>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 export function VendorCardScreen() {
   const { vendorId } = vendorCardRoute.useParams()
@@ -58,11 +171,29 @@ export function VendorCardScreen() {
   const addAlias = useAddAlias(id)
   const removeAlias = useRemoveAlias(id)
   const updateHeader = useUpdateVendorHeader(id)
+  const addListings = useAddListings(id)
+  const excludeListings = useExcludeListings(id)
+  const restoreListing = useRestoreListing(id)
   const [aliasOpen, setAliasOpen] = useState(false)
   const [aliasDraft, setAliasDraft] = useState("")
   const [nameError, setNameError] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [expanded, setExpanded] = useState<string[]>([])
+  const [excludeDialog, setExcludeDialog] = useState<ExcludeDialogState | null>(
+    null
+  )
+
+  /** Общий тост фактического масштаба (гард на нули — гонка/no-op тоста не даёт). */
+  async function confirmExclude(body: ExcludeBody) {
+    const res = await excludeListings.mutateAsync(body)
+    if (res && res.excluded_classes > 0) {
+      toast(
+        `Исключён из ${res.excluded_positions} ${pluralPositions(
+          res.excluded_positions
+        )} и ${res.excluded_classes} ${pluralClasses(res.excluded_classes)}`
+      )
+    }
+  }
 
   if (isPending)
     return (
@@ -139,9 +270,34 @@ export function VendorCardScreen() {
                   }}
                 />
               </h1>
-              <Badge variant="outline" className="rounded-full">
-                {kindLabel(data.kind)}
-              </Badge>
+              {editMode ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" aria-label="Изменить тип вендора">
+                      <Badge
+                        variant="outline"
+                        className="cursor-pointer rounded-full hover:border-primary"
+                      >
+                        {kindLabel(data.kind)}
+                      </Badge>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    {Object.entries(KIND_LABELS).map(([value, label]) => (
+                      <DropdownMenuItem
+                        key={value}
+                        onSelect={() => updateHeader.mutate({ kind: value })}
+                      >
+                        {label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Badge variant="outline" className="rounded-full">
+                  {kindLabel(data.kind)}
+                </Badge>
+              )}
               {data.starred && (
                 <Badge variant="outline" className="gap-1 rounded-full">
                   <Star className="size-3 fill-current" aria-hidden />
@@ -354,8 +510,8 @@ export function VendorCardScreen() {
                     value={String(s.building_type_id)}
                     className="border-b-0"
                   >
-                    <AccordionPrimitive.Header className="flex">
-                      <AccordionPrimitive.Trigger className="group flex w-full items-center gap-2.5 border-y border-border bg-muted px-5 py-2.5 text-left outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                    <AccordionPrimitive.Header className="flex border-y border-border bg-muted">
+                      <AccordionPrimitive.Trigger className="group flex flex-1 items-center gap-2.5 px-5 py-2.5 text-left outline-none focus-visible:ring-1 focus-visible:ring-ring">
                         <ChevronRight
                           aria-hidden
                           className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90 group-data-[state=open]:text-primary"
@@ -367,69 +523,178 @@ export function VendorCardScreen() {
                           {summary}
                         </span>
                       </AccordionPrimitive.Trigger>
+                      {editMode && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label={`действия стандарта ${s.building_type_name}`}
+                              className="flex shrink-0 items-center px-3 text-muted-foreground hover:text-foreground"
+                            >
+                              <Ellipsis className="size-4" aria-hidden />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={() =>
+                                setExcludeDialog({
+                                  title: `Исключить из «${s.building_type_name}»?`,
+                                  scale: excludeScaleForStandard(s),
+                                  body: {
+                                    scope: "standard",
+                                    building_type_id: s.building_type_id,
+                                  },
+                                })
+                              }
+                            >
+                              Исключить из стандарта
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </AccordionPrimitive.Header>
                     <AccordionContent className="mr-5 ml-8 border-l border-border pl-4">
                       <div className="divide-y divide-border/60">
-                        {s.positions.map((p) => (
-                          <div
-                            key={p.position_id}
-                            className="flex flex-wrap items-center gap-x-2 gap-y-1.5 py-2"
-                          >
-                            <span className="flex-1 text-small text-foreground">
-                              {(() => {
-                                const { head, qualifier } = splitQualifier(
-                                  p.position_name
-                                )
-                                return (
-                                  <>
-                                    {head}
-                                    {qualifier && (
-                                      <span className="text-muted-foreground">
-                                        {" "}
-                                        ({qualifier})
-                                      </span>
-                                    )}
-                                  </>
-                                )
-                              })()}
-                            </span>
-                            {isAllClasses(p, s.segment_count) ? (
-                              <span className="flex items-center gap-1 text-caption text-muted-foreground">
-                                <CheckCheck
-                                  className="size-3.5 text-mint"
-                                  aria-hidden
-                                />
-                                все классы
-                              </span>
-                            ) : (
-                              <div className="flex w-full flex-wrap gap-1.5">
-                                {p.chips.map((c) =>
-                                  c.state === "allowed" ? (
-                                    <Badge
-                                      key={c.segment_id}
-                                      variant="outline"
-                                      className="bg-accent"
-                                    >
-                                      {c.segment_name}
-                                    </Badge>
-                                  ) : (
-                                    <Badge
-                                      key={c.segment_id}
-                                      variant="outline"
-                                      className="border-dashed border-border-strong text-muted-foreground line-through"
-                                      title={excludedTooltip(c.release_label)}
-                                      aria-label={excludedTooltip(
-                                        c.release_label
-                                      )}
-                                    >
-                                      {c.segment_name}
-                                    </Badge>
+                        {s.positions.map((p) => {
+                          const presentSegmentIds = new Set(
+                            p.chips.map((c) => c.segment_id)
+                          )
+                          return (
+                            <div
+                              key={p.position_id}
+                              className="flex flex-wrap items-center gap-x-2 gap-y-1.5 py-2"
+                            >
+                              <span className="flex-1 text-small text-foreground">
+                                {(() => {
+                                  const { head, qualifier } = splitQualifier(
+                                    p.position_name
                                   )
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                                  return (
+                                    <>
+                                      {head}
+                                      {qualifier && (
+                                        <span className="text-muted-foreground">
+                                          {" "}
+                                          ({qualifier})
+                                        </span>
+                                      )}
+                                    </>
+                                  )
+                                })()}
+                              </span>
+                              {editMode && (
+                                <button
+                                  type="button"
+                                  aria-label={`исключить из позиции ${p.position_name}`}
+                                  onClick={() =>
+                                    setExcludeDialog({
+                                      title: `Исключить «${splitQualifier(p.position_name).head}» из «${s.building_type_name}»?`,
+                                      scale: excludeScaleForPosition(p),
+                                      body: {
+                                        scope: "position",
+                                        position_id: p.position_id,
+                                        building_type_id: s.building_type_id,
+                                      },
+                                    })
+                                  }
+                                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                                >
+                                  <CircleMinus className="size-4" aria-hidden />
+                                </button>
+                              )}
+                              {!editMode && isAllClasses(p, s.segment_count) ? (
+                                <span className="flex items-center gap-1 text-caption text-muted-foreground">
+                                  <CheckCheck
+                                    className="size-3.5 text-mint"
+                                    aria-hidden
+                                  />
+                                  все классы
+                                </span>
+                              ) : (
+                                <div className="flex w-full flex-wrap items-center gap-1.5">
+                                  {p.chips.map((c) =>
+                                    c.state === "allowed" ? (
+                                      <span
+                                        key={c.segment_id}
+                                        className="inline-flex items-center gap-1"
+                                      >
+                                        <Badge
+                                          variant="outline"
+                                          className="bg-accent"
+                                        >
+                                          {c.segment_name}
+                                        </Badge>
+                                        {editMode && (
+                                          <button
+                                            type="button"
+                                            aria-label={`исключить класс ${c.segment_name}`}
+                                            onClick={() =>
+                                              confirmExclude({
+                                                scope: "class",
+                                                position_id: p.position_id,
+                                                segment_id: c.segment_id,
+                                              })
+                                            }
+                                            className="text-muted-foreground hover:text-destructive"
+                                          >
+                                            <X className="size-3" />
+                                          </button>
+                                        )}
+                                      </span>
+                                    ) : (
+                                      <span
+                                        key={c.segment_id}
+                                        className="inline-flex items-center gap-1.5"
+                                      >
+                                        <Badge
+                                          variant="outline"
+                                          className="border-dashed border-border-strong text-muted-foreground line-through"
+                                          title={excludedTooltip(
+                                            c.release_label
+                                          )}
+                                          aria-label={excludedTooltip(
+                                            c.release_label
+                                          )}
+                                        >
+                                          {c.segment_name}
+                                        </Badge>
+                                        {editMode && (
+                                          <button
+                                            type="button"
+                                            aria-label={`вернуть ${c.segment_name}`}
+                                            onClick={() =>
+                                              restoreListing.mutate({
+                                                position_id: p.position_id,
+                                                segment_id: c.segment_id,
+                                              })
+                                            }
+                                            className="text-caption text-primary hover:underline"
+                                          >
+                                            вернуть
+                                          </button>
+                                        )}
+                                      </span>
+                                    )
+                                  )}
+                                  {editMode && (
+                                    <AddClassPopover
+                                      buildingTypeId={s.building_type_id}
+                                      presentSegmentIds={presentSegmentIds}
+                                      pending={addListings.isPending}
+                                      onAdd={(segmentIds) =>
+                                        addListings.mutate({
+                                          position_id: p.position_id,
+                                          segment_ids: segmentIds,
+                                        })
+                                      }
+                                    />
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     </AccordionContent>
                   </AccordionItem>
@@ -451,6 +716,21 @@ export function VendorCardScreen() {
           </>
         )}
       </section>
+      <ExcludeDialog
+        open={excludeDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) setExcludeDialog(null)
+        }}
+        title={excludeDialog?.title ?? ""}
+        scale={excludeDialog?.scale ?? { positions: 0, classes: 0 }}
+        pending={excludeListings.isPending}
+        onConfirm={() => {
+          if (!excludeDialog) return
+          void confirmExclude(excludeDialog.body).finally(() =>
+            setExcludeDialog(null)
+          )
+        }}
+      />
     </div>
   )
 }

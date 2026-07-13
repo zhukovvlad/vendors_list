@@ -1,6 +1,6 @@
 /** Чистые хелперы карточки вендора: локализация enum и тексты (без версий релиза). */
 
-const KIND_LABELS: Record<string, string> = {
+export const KIND_LABELS: Record<string, string> = {
   manufacturer: "производитель",
   supplier: "поставщик",
   other: "прочее",

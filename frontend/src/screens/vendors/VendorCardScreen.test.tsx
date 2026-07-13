@@ -465,3 +465,51 @@ describe("VendorCardScreen — инлайн-правка шапки", () => {
     await waitFor(() => expect(patched).toEqual({ note: "" }))
   })
 })
+
+describe("VendorCardScreen — операции разрешений", () => {
+  it("класс «×» → мутация без диалога + появляется «вернуть»", async () => {
+    let excludeBody: unknown = null
+    server.use(
+      http.post(
+        "/api/vendors/:vendorId/listings/exclude",
+        async ({ request }) => {
+          excludeBody = await request.json()
+          return HttpResponse.json({
+            excluded_positions: 1,
+            excluded_classes: 1,
+          })
+        }
+      )
+    )
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode()
+    await userEvent.click(
+      screen.getByRole("button", { name: /исключить класс Делюкс/ })
+    )
+    await waitFor(() =>
+      expect(excludeBody).toMatchObject({ scope: "class", segment_id: 11 })
+    )
+  })
+
+  it("«⊖» позиции → диалог с масштабом", async () => {
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode()
+    await userEvent.click(
+      screen.getByRole("button", { name: /исключить из позиции/ })
+    )
+    expect(await screen.findByText(/Будет исключён из/)).toBeInTheDocument()
+  })
+
+  it("kebab стандарта → «Исключить из стандарта» → диалог", async () => {
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode()
+    await userEvent.click(
+      screen.getByRole("button", { name: /действия стандарта/ })
+    )
+    await userEvent.click(await screen.findByText("Исключить из стандарта"))
+    expect(await screen.findByText(/Будет исключён из/)).toBeInTheDocument()
+  })
+})
