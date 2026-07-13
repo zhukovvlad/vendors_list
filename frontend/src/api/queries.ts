@@ -114,6 +114,28 @@ export function useSegments(buildingTypeId?: number) {
   })
 }
 
+/**
+ * Позиции типа объекта для комбобокса «+ стандарт» (поиск по q). `building_type_id`
+ * обязателен в контракте API — гвардим на undefined внутри queryFn (typecheck),
+ * хотя `enabled` и не даёт queryFn реально выполниться раньше выбора стандарта.
+ */
+export function useMetaPositions(buildingTypeId?: number, q?: string) {
+  return useQuery({
+    queryKey: ["meta-positions", buildingTypeId, q],
+    enabled: buildingTypeId !== undefined,
+    queryFn: async () => {
+      if (buildingTypeId === undefined)
+        throw new Error("useMetaPositions: building_type_id не задан")
+      const { data, error } = await api.GET("/meta/positions", {
+        params: { query: { building_type_id: buildingTypeId, q } },
+      })
+      if (error) throw error
+      if (!data) throw new Error("Пустой ответ /meta/positions")
+      return data
+    },
+  })
+}
+
 export function useDashboard() {
   return useQuery({
     queryKey: ["dashboard"],

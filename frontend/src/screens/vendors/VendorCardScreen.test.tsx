@@ -513,3 +513,15 @@ describe("VendorCardScreen — операции разрешений", () => {
     expect(await screen.findByText(/Будет исключён из/)).toBeInTheDocument()
   })
 })
+
+describe("VendorCardScreen — + стандарт", () => {
+  it("открывает диалог; присутствующий стандарт приглушён", async () => {
+    renderAt()
+    await screen.findByRole("heading", { level: 1, name: /System Air/ })
+    await enterEditMode()
+    await userEvent.click(screen.getByRole("button", { name: "+ стандарт" }))
+    expect(await screen.findByRole("dialog")).toBeInTheDocument()
+    // «Жилой дом» присутствует (id=1 в where-allowed) → помечен «уже присутствует»
+    expect(await screen.findByText(/уже присутствует/)).toBeInTheDocument()
+  })
+})

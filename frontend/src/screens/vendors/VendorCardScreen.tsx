@@ -19,6 +19,7 @@ import {
 import {
   useAddAlias,
   useAddListings,
+  useBuildingTypes,
   useExcludeListings,
   useRemoveAlias,
   useRestoreListing,
@@ -50,6 +51,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { vendorCardRoute } from "@/router"
 
+import { AddStandardDialog } from "./AddStandardDialog"
 import { ExcludeDialog } from "./ExcludeDialog"
 import { InlineEditText } from "./InlineEditText"
 import {
@@ -174,6 +176,7 @@ export function VendorCardScreen() {
   const addListings = useAddListings(id)
   const excludeListings = useExcludeListings(id)
   const restoreListing = useRestoreListing(id)
+  const buildingTypes = useBuildingTypes()
   const [aliasOpen, setAliasOpen] = useState(false)
   const [aliasDraft, setAliasDraft] = useState("")
   const [nameError, setNameError] = useState<string | null>(null)
@@ -182,6 +185,7 @@ export function VendorCardScreen() {
   const [excludeDialog, setExcludeDialog] = useState<ExcludeDialogState | null>(
     null
   )
+  const [addStandardOpen, setAddStandardOpen] = useState(false)
 
   /** Общий тост фактического масштаба (гард на нули — гонка/no-op тоста не даёт). */
   async function confirmExclude(body: ExcludeBody) {
@@ -208,6 +212,10 @@ export function VendorCardScreen() {
 
   const standards = whereAllowed.data?.standards ?? []
   const positionTotal = standards.reduce((a, s) => a + s.position_count, 0)
+  const presentStandards = new Set(standards.map((s) => s.building_type_id))
+  const allStandardsPresent =
+    (buildingTypes.data?.length ?? 0) > 0 &&
+    presentStandards.size >= (buildingTypes.data?.length ?? 0)
 
   return (
     <div className="mx-auto flex max-w-[720px] flex-col gap-3 py-6">
@@ -715,7 +723,35 @@ export function VendorCardScreen() {
             )}
           </>
         )}
+        {editMode && (
+          <div className="mt-3 px-5">
+            <button
+              type="button"
+              disabled={allStandardsPresent}
+              title={
+                allStandardsPresent
+                  ? "вендор есть во всех стандартах"
+                  : undefined
+              }
+              onClick={() => setAddStandardOpen(true)}
+              className="inline-flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border-strong px-2.5 py-1.5 text-small text-primary disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              + стандарт
+            </button>
+          </div>
+        )}
       </section>
+      <AddStandardDialog
+        key={String(addStandardOpen)}
+        open={addStandardOpen}
+        onOpenChange={setAddStandardOpen}
+        present={presentStandards}
+        pending={addListings.isPending}
+        onAdd={(body) => {
+          addListings.mutate(body)
+          setAddStandardOpen(false)
+        }}
+      />
       <ExcludeDialog
         open={excludeDialog !== null}
         onOpenChange={(open) => {
