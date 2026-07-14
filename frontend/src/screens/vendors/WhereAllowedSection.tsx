@@ -241,6 +241,9 @@ export function WhereAllowedSection({
                   key={s.building_type_id}
                   standard={s}
                   editMode={editMode}
+                  // Раскрыт = не в списке явно свёрнутых (та же производная, что и
+                  // value аккордеона). Гейтит запрос сегментов для свёрнутых.
+                  isOpen={!collapsed.includes(String(s.building_type_id))}
                   addPending={addListings.isPending}
                   onExcludeStandard={onExcludeStandard}
                   onExcludePosition={onExcludePosition}

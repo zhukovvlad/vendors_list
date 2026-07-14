@@ -64,12 +64,16 @@ function WhereAllowedContent({
 /**
  * Один стандарт (тип объекта) в блоке «Где разрешён»: заголовок-аккордеон + ряды
  * позиций. Владеет ЕДИНСТВЕННЫМ `useSegments` на стандарт (не по хуку на ряд) —
- * газируется `enabled` через `editMode`, поэтому в view сегменты не грузятся.
- * Рендерит `AccordionItem` (контекст `Accordion` — у секции-родителя).
+ * газируется `enabled` через `editMode && isOpen`: в view сегменты не грузятся, а
+ * у свёрнутого стандарта запрос неактивен (хук живёт НАД `Accordion.Content`,
+ * который анмаунтит содержимое при сворачивании, — сам он так не деактивируется,
+ * поэтому гейт по `isOpen` явный). Рендерит `AccordionItem` (контекст `Accordion`
+ * — у секции-родителя).
  */
 export function WhereAllowedStandard({
   standard,
   editMode,
+  isOpen,
   addPending,
   onExcludeStandard,
   onExcludePosition,
@@ -79,6 +83,7 @@ export function WhereAllowedStandard({
 }: {
   standard: Standard
   editMode: boolean
+  isOpen: boolean
   addPending: boolean
   onExcludeStandard: (standard: Standard) => void
   onExcludePosition: (standard: Standard, position: Position) => void
@@ -86,8 +91,10 @@ export function WhereAllowedStandard({
   onRestore: (positionId: number, segmentId: number) => void
   onAddClasses: (positionId: number, segmentIds: number[]) => void
 }) {
-  // Один запрос сегментов на стандарт, только в правке (в view «+ класс» нет).
-  const segments = useSegments(editMode ? standard.building_type_id : undefined)
+  // Один запрос сегментов на стандарт, только в правке и когда раскрыт.
+  const segments = useSegments(
+    editMode && isOpen ? standard.building_type_id : undefined
+  )
 
   const count = `${standard.position_count} ${pluralPositions(standard.position_count)}`
   const summary = standardAllClasses(standard) ? `${count} · все классы` : count
