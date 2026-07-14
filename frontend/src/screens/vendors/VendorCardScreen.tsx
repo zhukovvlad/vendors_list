@@ -1,11 +1,9 @@
 import { useState } from "react"
 import { Link } from "@tanstack/react-router"
-import { Award, Check, Merge, Pencil, Plus, Star, X } from "lucide-react"
+import { Award, Check, Merge, Pencil, Star } from "lucide-react"
 
 import {
-  useAddAlias,
   useBuildingTypes,
-  useRemoveAlias,
   useToggleAgreement,
   useUpdateVendorHeader,
   useVendor,
@@ -23,6 +21,7 @@ import { Switch } from "@/components/ui/switch"
 import { vendorCardRoute } from "@/router"
 
 import { InlineEditText } from "./InlineEditText"
+import { VendorAliasesSection } from "./VendorAliasesSection"
 import { WhereAllowedSection } from "./WhereAllowedSection"
 import {
   avatarInitial,
@@ -41,11 +40,7 @@ export function VendorCardScreen() {
   const whereAllowed = useVendorWhereAllowed(id)
   const buildingTypes = useBuildingTypes()
   const toggleAgreement = useToggleAgreement(id)
-  const addAlias = useAddAlias(id)
-  const removeAlias = useRemoveAlias(id)
   const updateHeader = useUpdateVendorHeader(id)
-  const [aliasOpen, setAliasOpen] = useState(false)
-  const [aliasDraft, setAliasDraft] = useState("")
   const [nameError, setNameError] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
   // Секции «Где разрешён» в edit раскрыты по умолчанию — храним лишь то, что
@@ -205,69 +200,11 @@ export function VendorCardScreen() {
       </section>
 
       {/* Варианты написания */}
-      <section className={`${CARD} px-5 py-[15px]`}>
-        <div className="mb-2.5 text-caption text-muted-foreground uppercase">
-          Варианты написания
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {data.aliases.length === 0 && (
-            <span className="text-small text-muted-foreground">
-              вариантов пока нет
-            </span>
-          )}
-          {data.aliases.map((a) => (
-            <Badge key={a.id} variant="outline" className="gap-1">
-              {a.alias}
-              {editMode && (
-                <button
-                  type="button"
-                  aria-label={`удалить ${a.alias}`}
-                  onClick={() => removeAlias.mutate(a.id)}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <X className="size-3" />
-                </button>
-              )}
-            </Badge>
-          ))}
-          {editMode &&
-            (aliasOpen ? (
-              <span className="flex items-center gap-1">
-                <input
-                  autoFocus
-                  value={aliasDraft}
-                  onChange={(e) => setAliasDraft(e.target.value)}
-                  placeholder="вариант написания"
-                  className="h-7 rounded-md border border-border bg-transparent px-2 text-small"
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={aliasDraft.trim() === "" || addAlias.isPending}
-                  onClick={() => {
-                    addAlias.mutate(aliasDraft.trim(), {
-                      onSuccess: () => {
-                        setAliasDraft("")
-                        setAliasOpen(false)
-                      },
-                    })
-                  }}
-                >
-                  Добавить
-                </Button>
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setAliasOpen(true)}
-                className="inline-flex items-center gap-1 rounded-md border border-dashed border-border-strong px-2.5 py-1 text-small text-primary"
-              >
-                <Plus className="size-3" aria-hidden />
-                вариант
-              </button>
-            ))}
-        </div>
-      </section>
+      <VendorAliasesSection
+        id={id}
+        aliases={data.aliases}
+        editMode={editMode}
+      />
 
       {/* Бренд и объединение */}
       <section className={`${CARD} px-5 py-[15px]`}>
