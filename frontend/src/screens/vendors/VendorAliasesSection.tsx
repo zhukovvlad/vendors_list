@@ -5,9 +5,7 @@ import { useAddAlias, useRemoveAlias } from "@/api/queries"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 
-import { CARD } from "./model"
-
-type Alias = { id: number; alias: string }
+import { CARD, type VendorAlias } from "./model"
 
 /**
  * Секция «Варианты написания»: чипы алиасов + правка в edit (× на чипе, «+ вариант»
@@ -21,7 +19,7 @@ export function VendorAliasesSection({
   editMode,
 }: {
   id: number
-  aliases: Alias[]
+  aliases: VendorAlias[]
   editMode: boolean
 }) {
   const addAlias = useAddAlias(id)

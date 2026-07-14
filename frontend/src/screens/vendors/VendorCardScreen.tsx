@@ -31,6 +31,16 @@ import {
   pluralVendors,
 } from "./model"
 
+/**
+ * Экран карточки вендора — корень композиции. Отвечает за шапку (инлайн-правка
+ * имени/примечания/типа, тумблер соглашения), режим правки (`editMode`) и склейку
+ * секций `VendorAliasesSection` / `WhereAllowedSection`.
+ *
+ * Read-запросы (`useVendorWhereAllowed`/`useBuildingTypes`) держим здесь, а не в
+ * секции, чтобы они стартовали параллельно с `useVendor`, а не водопадом после её
+ * монтирования (секция под early-return загрузки). `collapsed` тоже здесь: сброс
+ * раскрытия синхронен со входом в edit (обработчик кнопки), без seed-эффекта.
+ */
 export function VendorCardScreen() {
   const { vendorId } = vendorCardRoute.useParams()
   const id = Number(vendorId)
