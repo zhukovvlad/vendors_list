@@ -18,9 +18,6 @@ import {
   useSegments,
   useVendorWhereAllowed,
 } from "@/api/queries"
-
-type WhereAllowedQuery = ReturnType<typeof useVendorWhereAllowed>
-type BuildingTypesQuery = ReturnType<typeof useBuildingTypes>
 import { Accordion, AccordionItem } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -55,6 +52,11 @@ import {
   WHERE_ALLOWED_EMPTY,
   whereAllowedLegend,
 } from "./model"
+
+// Read-запросы приходят пропами из экрана (параллельный старт с useVendor) —
+// типы деривим из хуков, чтобы контракт следовал за сгенерированной схемой.
+type WhereAllowedQuery = ReturnType<typeof useVendorWhereAllowed>
+type BuildingTypesQuery = ReturnType<typeof useBuildingTypes>
 
 type ExcludeBody = {
   scope: "class" | "position" | "standard"
