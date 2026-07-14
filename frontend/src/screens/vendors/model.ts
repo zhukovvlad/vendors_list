@@ -1,5 +1,13 @@
 /** Чистые хелперы карточки вендора: локализация enum и тексты (без версий релиза). */
 
+import type { components } from "@/api/schema"
+
+/** Вариант написания вендора — из сгенерированной схемы (единый контракт с API). */
+export type VendorAlias = components["schemas"]["VendorAlias"]
+
+/** Оболочка карточки-секции: общий класс для всех блоков карточки вендора. */
+export const CARD = "rounded-xl border border-border bg-card"
+
 export const KIND_LABELS: Record<string, string> = {
   manufacturer: "производитель",
   supplier: "поставщик",
