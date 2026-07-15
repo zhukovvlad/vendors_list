@@ -170,54 +170,55 @@ export function MatrixScreen() {
         <div className="text-destructive">Ошибка загрузки матрицы.</div>
       )}
 
-      <Table className="[&_td]:py-1.5">
-        <TableHeader className="bg-muted [&_th]:uppercase">
-          {table.getHeaderGroups().map((hg) => (
-            <TableRow key={hg.id}>
-              {hg.headers.map((h) => (
-                <TableHead
-                  key={h.id}
-                  colSpan={h.colSpan}
-                  className={cn(h.column.columnDef.meta?.headerClassName)}
-                >
-                  {h.isPlaceholder
-                    ? null
-                    : flexRender(h.column.columnDef.header, h.getContext())}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {displayRows.map((dr) =>
-            dr.kind === "section" ? (
-              <TableRow key={dr.key} className="bg-muted hover:bg-muted">
-                <TableCell className="sticky left-0 z-[1] border-r border-border bg-muted text-caption font-medium tracking-wide text-muted-foreground uppercase">
-                  {dr.categoryPath}
-                </TableCell>
-                <TableCell
-                  colSpan={Math.max(1, leafCount - 1)}
-                  className="bg-muted"
-                />
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <Table className="text-small [&_td]:px-2 [&_td]:py-1.5 [&_th]:h-8 [&_th]:px-2">
+          <TableHeader className="bg-muted [&_th]:uppercase">
+            {table.getHeaderGroups().map((hg) => (
+              <TableRow key={hg.id}>
+                {hg.headers.map((h) => (
+                  <TableHead
+                    key={h.id}
+                    colSpan={h.colSpan}
+                    className={cn(h.column.columnDef.meta?.headerClassName)}
+                  >
+                    {h.isPlaceholder
+                      ? null
+                      : flexRender(h.column.columnDef.header, h.getContext())}
+                  </TableHead>
+                ))}
               </TableRow>
-            ) : (
-              <TableRow key={dr.key} className="group">
-                {rowByPos
-                  .get(dr.row.position_id)
-                  ?.getVisibleCells()
-                  .map((c) => (
-                    <TableCell
-                      key={c.id}
-                      className={cn(c.column.columnDef.meta?.className)}
-                    >
-                      {flexRender(c.column.columnDef.cell, c.getContext())}
-                    </TableCell>
-                  ))}
-              </TableRow>
-            )
-          )}
-        </TableBody>
-      </Table>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {displayRows.map((dr) =>
+              dr.kind === "section" ? (
+                <TableRow key={dr.key} className="bg-muted hover:bg-muted">
+                  <TableCell
+                    colSpan={leafCount}
+                    className="sticky left-0 z-[1] bg-muted text-caption font-medium tracking-wide text-muted-foreground uppercase"
+                  >
+                    {dr.categoryPath}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                <TableRow key={dr.key} className="group">
+                  {rowByPos
+                    .get(dr.row.position_id)
+                    ?.getVisibleCells()
+                    .map((c) => (
+                      <TableCell
+                        key={c.id}
+                        className={cn(c.column.columnDef.meta?.className)}
+                      >
+                        {flexRender(c.column.columnDef.cell, c.getContext())}
+                      </TableCell>
+                    ))}
+                </TableRow>
+              )
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       <div className="flex items-center gap-3 text-caption text-muted-foreground">
         <span>

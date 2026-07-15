@@ -26,7 +26,7 @@ export function renderCell(cell: MatrixCell | null) {
             <span
               title={v.note ?? undefined}
               className={cn(
-                "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-caption whitespace-nowrap transition-colors",
+                "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-caption leading-none tracking-normal whitespace-nowrap transition-colors",
                 v.starred
                   ? "border-chart-2/40 bg-chart-2/10 text-foreground hover:border-chart-2/60"
                   : "border-border-strong bg-card text-foreground hover:bg-accent"
@@ -51,7 +51,14 @@ export function renderCell(cell: MatrixCell | null) {
     )
   }
   if (cell.spec_text)
-    return <Badge variant="requirement">{cell.spec_text}</Badge>
+    return (
+      <Badge
+        variant="requirement"
+        className="max-w-[180px] font-normal tracking-normal whitespace-normal"
+      >
+        {cell.spec_text}
+      </Badge>
+    )
   return <span className="text-muted-foreground/60">—</span>
 }
 
@@ -69,7 +76,7 @@ export function buildColumnDefs(
         <span className="leading-tight font-medium">
           {head}
           {qualifier && (
-            <span className="block text-caption font-normal text-muted-foreground">
+            <span className="block text-caption font-normal tracking-normal text-muted-foreground">
               {qualifier}
             </span>
           )}
