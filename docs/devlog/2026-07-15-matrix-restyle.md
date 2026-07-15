@@ -13,7 +13,7 @@
 [план](../superpowers/plans/2026-07-15-matrix-restyle.md),
 [мокап](../superpowers/specs/2026-07-15-matrix-restyle-mockup.html).
 
-PR: (открывается после финального ревью)
+PR: [#30](https://github.com/zhukovvlad/vendors_list/pull/30)
 
 ## Что сделано
 
