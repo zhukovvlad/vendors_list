@@ -348,7 +348,10 @@ import { splitQualifier } from "@/lib/qualifier"
       )
     },
     meta: {
-      className: "sticky left-0 z-[2] min-w-[220px] bg-card border-r border-border",
+      // group-hover: подсветка липкой ячейки вместе со строкой (её opaque bg-card
+      // маскирует hover:bg-muted/50 строки — нужен собственный group-hover).
+      className:
+        "sticky left-0 z-[2] min-w-[220px] bg-card border-r border-border group-hover:bg-muted/50",
       headerClassName: "sticky left-0 z-[4] bg-muted border-r border-border",
     },
   }) as ColumnDef<MatrixRow, unknown>
@@ -359,7 +362,10 @@ import { splitQualifier } from "@/lib/qualifier"
 Заменить блок `segCols` (строки 63-80) так, чтобы первый лист каждой группы и заголовок группы несли левый бордер:
 
 ```tsx
-  const segCols = columns.flatMap((grp) => {
+  const segCols = columns.flatMap((grp, gi) => {
+    // Левый разделитель — МЕЖДУ группами; у первой группы не рисуем, иначе двойная
+    // линия вплотную к border-r липкой «Позиции».
+    const border = gi > 0 ? "border-l border-border" : undefined
     const leaves = grp.segments.map(
       (s, idx) =>
         ch.display({
@@ -367,8 +373,8 @@ import { splitQualifier } from "@/lib/qualifier"
           header: s.name,
           cell: ({ row }) => renderCell(cellFor(row.original, s.id)),
           meta:
-            idx === 0
-              ? { className: "border-l border-border", headerClassName: "border-l border-border" }
+            idx === 0 && border
+              ? { className: border, headerClassName: border }
               : undefined,
         }) as ColumnDef<MatrixRow, unknown>
     )
@@ -378,11 +384,13 @@ import { splitQualifier } from "@/lib/qualifier"
         id: `g${grp.group.id}`,
         header: grp.group.name,
         columns: leaves,
-        meta: { headerClassName: "border-l border-border text-center" },
+        meta: { headerClassName: cn(border, "text-center") },
       }) as ColumnDef<MatrixRow, unknown>,
     ]
   })
 ```
+
+> `cn` уже импортирован в `columns.tsx` (Task 3 Step 3). `cn(undefined, "text-center")` → `"text-center"`.
 
 - [ ] **Step 4: Typecheck (augmentation работает, meta типизирован)**
 
@@ -470,7 +478,13 @@ import { cn } from "@/lib/utils"
             ) : (
 ```
 
-- [ ] **Step 5: Прокидка `meta.className` в ячейки тела**
+- [ ] **Step 5: Прокидка `meta.className` в ячейки тела + `group` на строку**
+
+В рендере строк-позиций (не-section ветка, строка ~190) заменить `<TableRow key={dr.key}>` на (`group` включает `group-hover:` липкой ячейки из Task 4):
+
+```tsx
+              <TableRow key={dr.key} className="group">
+```
 
 В рендере ячеек позиции (строки 194-198) заменить `<TableCell key={c.id}>` на:
 
@@ -481,21 +495,31 @@ import { cn } from "@/lib/utils"
                     >
 ```
 
-- [ ] **Step 6: Прогнать интеграционный тест матрицы**
+- [ ] **Step 6: Плотность ячеек**
+
+Дать таблице более плотный вертикальный ритм — заменить `<Table>` (строка 164) на:
+
+```tsx
+      <Table className="[&_td]:py-1.5">
+```
+
+> `tabular-nums` из спеки — **не применимо**: в ячейках имена вендоров/текст требований, числовых колонок нет. Записано осознанно, а не пропущено.
+
+- [ ] **Step 7: Прогнать интеграционный тест матрицы**
 
 Run: `cd frontend && npx vitest run src/screens/matrix/MatrixScreen.test.tsx`
 Expected: PASS — все 4 кейса (шапки/звезда/требование/раздел; дебаунс-поиск; пагинация; клик по вендору). CSS-uppercase не меняет `textContent`, `getByText` устойчив.
 
-- [ ] **Step 7: Typecheck**
+- [ ] **Step 8: Typecheck**
 
 Run: `cd frontend && npx tsc -b --noEmit`
 Expected: без ошибок.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add frontend/src/screens/matrix/MatrixScreen.tsx
-git commit -m "feat(matrix): sunken-шапка, sticky-left «Позиция», двухъячеечные разделы, шапка экрана"
+git commit -m "feat(matrix): sunken-шапка, sticky-left «Позиция», плотность, двухъячеечные разделы, шапка экрана"
 ```
 
 ---
@@ -550,12 +574,13 @@ Expected: все проверки зелёные.
 - Строки-разделы две ячейки → Task 5 (Step 4). ✅
 - Двухстрочная позиция (`splitQualifier`) → Task 2 + Task 4. ✅
 - Шапка экрана → Task 5 (Step 2). ✅
+- Плотность (паддинги + hover строки/липкой ячейки) → Task 4 (group-hover меты) + Task 5 (Step 5 `group`, Step 6 `[&_td]:py-1.5`). ✅ `tabular-nums` — не применимо (нет числовых колонок), записано явно.
 - Обе темы через токены → chart-2/warning/muted (Tasks 1,3,4,5). ✅
 - ColumnMeta augmentation → Task 4 (Step 1). ✅
 - `splitQualifier` в `lib/` + ре-экспорт → Task 2. ✅
 - requirement→warning → Task 1. ✅
 - Вне среза (sticky-top, инлайн-правка, backend) — нигде не реализуется. ✅
 
-**Placeholder scan:** плейсхолдеров нет; в Task 3 Step 1 явно помечено удалить пример-хелпер `renderInRouter` перед коммитом.
+**Placeholder scan:** плейсхолдеров нет. Тест-хелпер Task 3 Step 1 минимален (без роутер-контекста для не-ссылочных веток).
 
 **Type consistency:** `splitQualifier` сигнатура едина (Task 2 ↔ Task 4). `meta.className`/`headerClassName` объявлены в Task 4 Step 1 и потребляются под теми же именами в Task 4 (дефы) и Task 5 (прокидка). `renderCell(cell: MatrixCell | null)` — сигнатура не менялась.
