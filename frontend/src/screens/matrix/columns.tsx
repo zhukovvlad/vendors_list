@@ -87,7 +87,7 @@ export function buildColumnDefs(
       // group-hover: подсветка липкой ячейки вместе со строкой (её opaque bg-card
       // маскирует hover:bg-muted/50 строки — нужен собственный group-hover).
       className:
-        "sticky left-0 z-[2] min-w-[220px] bg-card border-r border-border group-hover:bg-muted/50",
+        "sticky left-0 z-[2] min-w-[190px] bg-card border-r border-border group-hover:bg-muted/50",
       headerClassName: "sticky left-0 z-[4] bg-muted border-r border-border",
     },
   }) as ColumnDef<MatrixRow, unknown>

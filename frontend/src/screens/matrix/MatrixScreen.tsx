@@ -171,7 +171,7 @@ export function MatrixScreen() {
       )}
 
       <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-        <Table className="text-small [&_td]:px-2 [&_td]:py-1.5 [&_th]:h-8 [&_th]:px-2">
+        <Table className="text-small [&_td]:px-1.5 [&_td]:py-1.5 [&_th]:h-8 [&_th]:px-1.5">
           <TableHeader className="bg-muted [&_th]:uppercase">
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>
