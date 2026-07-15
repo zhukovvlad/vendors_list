@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react"
 
 import { matrixRoute } from "@/router"
 import { useMatrix, useBuildingTypes, useSegments } from "@/api/queries"
+import { cn } from "@/lib/utils"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   Table,
@@ -95,6 +96,14 @@ export function MatrixScreen() {
 
   return (
     <div className="flex flex-col gap-4 p-6 text-foreground">
+      <div>
+        <h1 className="text-h3 font-semibold tracking-tight">
+          Каталог стандартов
+        </h1>
+        <p className="text-small text-muted-foreground">
+          Какие вендоры допущены в каком классе объекта.
+        </p>
+      </div>
       <Card>
         <CardContent className="flex flex-wrap items-end gap-3 pt-4">
           <label className="flex flex-col gap-1 text-caption text-muted-foreground">
@@ -161,12 +170,16 @@ export function MatrixScreen() {
         <div className="text-destructive">Ошибка загрузки матрицы.</div>
       )}
 
-      <Table>
-        <TableHeader>
+      <Table className="[&_td]:py-1.5">
+        <TableHeader className="bg-muted [&_th]:uppercase">
           {table.getHeaderGroups().map((hg) => (
             <TableRow key={hg.id}>
               {hg.headers.map((h) => (
-                <TableHead key={h.id} colSpan={h.colSpan}>
+                <TableHead
+                  key={h.id}
+                  colSpan={h.colSpan}
+                  className={cn(h.column.columnDef.meta?.headerClassName)}
+                >
                   {h.isPlaceholder
                     ? null
                     : flexRender(h.column.columnDef.header, h.getContext())}
@@ -178,21 +191,22 @@ export function MatrixScreen() {
         <TableBody>
           {displayRows.map((dr) =>
             dr.kind === "section" ? (
-              <TableRow key={dr.key} className="bg-muted/40">
-                <TableCell
-                  colSpan={leafCount}
-                  className="text-caption font-medium text-muted-foreground"
-                >
+              <TableRow key={dr.key} className="bg-muted hover:bg-muted">
+                <TableCell className="sticky left-0 z-[1] border-r border-border bg-muted text-caption font-medium uppercase tracking-wide text-muted-foreground">
                   {dr.categoryPath}
                 </TableCell>
+                <TableCell colSpan={leafCount - 1} className="bg-muted" />
               </TableRow>
             ) : (
-              <TableRow key={dr.key}>
+              <TableRow key={dr.key} className="group">
                 {rowByPos
                   .get(dr.row.position_id)
                   ?.getVisibleCells()
                   .map((c) => (
-                    <TableCell key={c.id}>
+                    <TableCell
+                      key={c.id}
+                      className={cn(c.column.columnDef.meta?.className)}
+                    >
                       {flexRender(c.column.columnDef.cell, c.getContext())}
                     </TableCell>
                   ))}
