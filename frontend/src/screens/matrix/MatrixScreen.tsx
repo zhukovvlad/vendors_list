@@ -195,7 +195,10 @@ export function MatrixScreen() {
                 <TableCell className="sticky left-0 z-[1] border-r border-border bg-muted text-caption font-medium tracking-wide text-muted-foreground uppercase">
                   {dr.categoryPath}
                 </TableCell>
-                <TableCell colSpan={leafCount - 1} className="bg-muted" />
+                <TableCell
+                  colSpan={Math.max(1, leafCount - 1)}
+                  className="bg-muted"
+                />
               </TableRow>
             ) : (
               <TableRow key={dr.key} className="group">
