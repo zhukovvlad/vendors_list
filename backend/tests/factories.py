@@ -129,6 +129,21 @@ async def make_release(
     label: str = "ред. тест",
     status: str = "open",
 ) -> int:
+    """Вставить релиз типа. Для open-релиза СПЕРВА гасим чужой open этого типа
+    (перевод в 'archived'): CI ветвит эфемерную БД от production (docs/TECH_DEBT.md),
+    где реальные правки листингов через API оставляют open-маркер (ensure_open_release),
+    и слепая вставка второго open упёрлась бы в uq_release_one_open (один open на тип).
+    No-op, если чужого open нет (проходящих тестов не касается); всё в откатываемой
+    тест-транзакции — production не затрагивается. archived выбран намеренно: без
+    FK-каскадов и триггеров (на release их нет), партиальный уникальный индекс освобождается."""
+    if status == "open":
+        await conn.execute(
+            text(
+                "UPDATE release SET status = 'archived' "
+                "WHERE building_type_id = :bt AND status = 'open'"
+            ),
+            {"bt": building_type_id},
+        )
     return (
         await conn.execute(
             text(
