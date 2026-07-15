@@ -192,7 +192,7 @@ export function MatrixScreen() {
           {displayRows.map((dr) =>
             dr.kind === "section" ? (
               <TableRow key={dr.key} className="bg-muted hover:bg-muted">
-                <TableCell className="sticky left-0 z-[1] border-r border-border bg-muted text-caption font-medium uppercase tracking-wide text-muted-foreground">
+                <TableCell className="sticky left-0 z-[1] border-r border-border bg-muted text-caption font-medium tracking-wide text-muted-foreground uppercase">
                   {dr.categoryPath}
                 </TableCell>
                 <TableCell colSpan={leafCount - 1} className="bg-muted" />

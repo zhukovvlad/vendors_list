@@ -66,7 +66,7 @@ export function buildColumnDefs(
     cell: ({ row }) => {
       const { head, qualifier } = splitQualifier(row.original.position_name)
       return (
-        <span className="font-medium leading-tight">
+        <span className="leading-tight font-medium">
           {head}
           {qualifier && (
             <span className="block text-caption font-normal text-muted-foreground">
