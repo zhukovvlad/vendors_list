@@ -5,6 +5,12 @@ import type { components } from "@/api/schema"
 /** Вариант написания вендора — из сгенерированной схемы (единый контракт с API). */
 export type VendorAlias = components["schemas"]["VendorAlias"]
 
+/** Узлы дерева «Где разрешён» и сегмент — из схемы (пропсы под-компонентов секции). */
+export type Standard = components["schemas"]["WhereAllowedStandard"]
+export type Position = components["schemas"]["WhereAllowedPosition"]
+export type Chip = components["schemas"]["WhereAllowedChip"]
+export type Segment = components["schemas"]["Segment"]
+
 /** Оболочка карточки-секции: общий класс для всех блоков карточки вендора. */
 export const CARD = "rounded-xl border border-border bg-card"
 

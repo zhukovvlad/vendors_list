@@ -1,56 +1,31 @@
-import { useState, type ReactNode } from "react"
-import { Accordion as AccordionPrimitive } from "radix-ui"
+import { useState } from "react"
 import { toast } from "sonner"
-import {
-  CheckCheck,
-  ChevronRight,
-  CircleMinus,
-  Ellipsis,
-  Plus,
-  X,
-} from "lucide-react"
 
 import {
   useAddListings,
   useBuildingTypes,
   useExcludeListings,
   useRestoreListing,
-  useSegments,
   useVendorWhereAllowed,
 } from "@/api/queries"
-import { Accordion, AccordionItem } from "@/components/ui/accordion"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
+import { Accordion } from "@/components/ui/accordion"
 
 import { AddStandardDialog } from "./AddStandardDialog"
 import { ExcludeDialog } from "./ExcludeDialog"
+import { WhereAllowedStandard } from "./WhereAllowedStandard"
 import {
   CARD,
-  excludedTooltip,
   excludeScaleForPosition,
   excludeScaleForStandard,
   hasExcludedChips,
-  isAllClasses,
   pluralClasses,
   pluralPositions,
   pluralStandards,
   splitQualifier,
-  standardAllClasses,
   WHERE_ALLOWED_EMPTY,
   whereAllowedLegend,
+  type Position,
+  type Standard,
 } from "./model"
 
 // Read-запросы приходят пропами из экрана (параллельный старт с useVendor) —
@@ -72,126 +47,11 @@ type ExcludeDialogState = {
 }
 
 /**
- * Контент секции «Где разрешён». Аналог DS `AccordionContent`, но с оглядкой на
- * edit-режим (вариант B фикса клиппинга): в правке секции раскрыты принудительно
- * и контент РАСТЁТ (чипы получают ×, появляются ⊖/«+ класс»). Radix замеряет
- * `--radix-accordion-content-height` в момент открытия — до дорастания, — и
- * `overflow-hidden` режет хвост. Поэтому в edit рендерим без анимации/overflow/
- * фикс-высоты (height auto, overflow visible). В view контент статичен — анимация
- * и клип остаются как в DS. DS-примитив не форкаем (golden-rule: правка на уровне
- * экрана, триггер здесь тоже кастомный).
- */
-function WhereAllowedContent({
-  editMode,
-  className,
-  children,
-}: {
-  editMode: boolean
-  className?: string
-  children: ReactNode
-}) {
-  return (
-    <AccordionPrimitive.Content
-      data-slot="accordion-content"
-      className={cn(
-        "text-sm",
-        !editMode &&
-          "overflow-hidden data-open:animate-accordion-down data-closed:animate-accordion-up"
-      )}
-    >
-      <div
-        className={cn(
-          "pt-0 pb-2.5",
-          !editMode && "h-(--radix-accordion-content-height)",
-          className
-        )}
-      >
-        {children}
-      </div>
-    </AccordionPrimitive.Content>
-  )
-}
-
-/**
- * «+ класс» на конце ряда позиции: Popover со списком сегментов типа, которых
- * ещё нет среди чипов позиции (ни allowed, ни excluded). Каждый экземпляр — свой
- * `useSegments` (хук в компоненте, не в цикле рендера родителя — валидно per instance).
- */
-function AddClassPopover({
-  buildingTypeId,
-  presentSegmentIds,
-  pending,
-  onAdd,
-}: {
-  buildingTypeId: number
-  presentSegmentIds: Set<number>
-  pending: boolean
-  onAdd: (segmentIds: number[]) => void
-}) {
-  const segments = useSegments(buildingTypeId)
-  const [open, setOpen] = useState(false)
-  const [checked, setChecked] = useState<number[]>([])
-  const missing = (segments.data ?? []).filter(
-    (s) => !presentSegmentIds.has(s.id)
-  )
-
-  if (missing.length === 0) return null
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next)
-        if (!next) setChecked([])
-      }}
-    >
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded-md border border-dashed border-border-strong px-2 py-0.5 text-caption text-primary"
-        >
-          <Plus className="size-3" aria-hidden />
-          класс
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-56">
-        <div className="flex flex-col gap-1.5">
-          {missing.map((s) => (
-            <label key={s.id} className="flex items-center gap-2 text-small">
-              <Checkbox
-                checked={checked.includes(s.id)}
-                onCheckedChange={(next) =>
-                  setChecked((prev) =>
-                    next === true
-                      ? [...prev, s.id]
-                      : prev.filter((id) => id !== s.id)
-                  )
-                }
-              />
-              {s.name}
-            </label>
-          ))}
-        </div>
-        <Button
-          size="sm"
-          disabled={checked.length === 0 || pending}
-          onClick={() => {
-            onAdd(checked)
-            setChecked([])
-            setOpen(false)
-          }}
-        >
-          Добавить
-        </Button>
-      </PopoverContent>
-    </Popover>
-  )
-}
-
-/**
  * Блок «Где разрешён» карточки вендора: обратный индекс разрешений (стандарт →
  * позиция → классы) плюс операции правки в edit-режиме. Владеет мутациями и
- * диалогами; РЕНДЕР презентационный.
+ * диалогами; рендер разложен на `WhereAllowedStandard` → `PositionRow` → `ClassChip`.
+ * Вниз идут семантические колбэки (исключить/вернуть/добавить) — сами мутации и
+ * построение диалогов остаются здесь, единым местом.
  *
  * Read-запросы (`whereAllowed`/`buildingTypes`) приходят пропами из экрана-контейнера
  * — так они стартуют ПАРАЛЛЕЛЬНО с `useVendor` на входе, а не водопадом после того,
@@ -259,6 +119,49 @@ export function WhereAllowedSection({
     } catch {
       toast("Не удалось добавить стандарт — попробуйте ещё раз")
     }
+  }
+
+  // Семантические колбэки для под-компонентов: построение диалога/мутации — здесь.
+  function onExcludeStandard(s: Standard) {
+    setExcludeDialog({
+      title: `Исключить из «${s.building_type_name}»?`,
+      scale: excludeScaleForStandard(s),
+      body: { scope: "standard", building_type_id: s.building_type_id },
+    })
+  }
+
+  function onExcludePosition(s: Standard, p: Position) {
+    setExcludeDialog({
+      title: `Исключить «${splitQualifier(p.position_name).head}» из «${s.building_type_name}»?`,
+      scale: excludeScaleForPosition(p),
+      body: {
+        scope: "position",
+        position_id: p.position_id,
+        building_type_id: s.building_type_id,
+      },
+    })
+  }
+
+  function onExcludeClass(positionId: number, segmentId: number) {
+    void confirmExclude({
+      scope: "class",
+      position_id: positionId,
+      segment_id: segmentId,
+    })
+  }
+
+  function onRestore(positionId: number, segmentId: number) {
+    restoreListing.mutate(
+      { position_id: positionId, segment_id: segmentId },
+      { onError: () => toast("Не удалось вернуть — попробуйте ещё раз") }
+    )
+  }
+
+  function onAddClasses(positionId: number, segmentIds: number[]) {
+    addListings.mutate(
+      { position_id: positionId, segment_ids: segmentIds },
+      { onError: () => toast("Не удалось добавить класс — попробуйте ещё раз") }
+    )
   }
 
   const standards = whereAllowed.data?.standards ?? []
@@ -333,230 +236,22 @@ export function WhereAllowedSection({
                   }
                 : {})}
             >
-              {standards.map((s) => {
-                const count = `${s.position_count} ${pluralPositions(s.position_count)}`
-                const summary = standardAllClasses(s)
-                  ? `${count} · все классы`
-                  : count
-                return (
-                  <AccordionItem
-                    key={s.building_type_id}
-                    value={String(s.building_type_id)}
-                    className="border-b-0"
-                  >
-                    <AccordionPrimitive.Header className="flex border-y border-border bg-muted">
-                      <AccordionPrimitive.Trigger className="group flex flex-1 items-center gap-2.5 px-5 py-2.5 text-left outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                        <ChevronRight
-                          aria-hidden
-                          className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90 group-data-[state=open]:text-primary"
-                        />
-                        <span className="flex-1 text-caption font-medium tracking-[0.09em] text-muted-foreground/70 uppercase group-data-[state=open]:text-muted-foreground">
-                          {s.building_type_name}
-                        </span>
-                        {/* Счётчик/сводка — атрибут просмотра: в edit полоса растёт
-                            в чипы, а сводка полуправдива и конкурирует с кебабом. */}
-                        {!editMode && (
-                          <span className="text-caption text-muted-foreground">
-                            {summary}
-                          </span>
-                        )}
-                      </AccordionPrimitive.Trigger>
-                      {editMode && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label={`действия стандарта ${s.building_type_name}`}
-                              className="flex shrink-0 items-center px-3 text-muted-foreground hover:text-foreground"
-                            >
-                              <Ellipsis className="size-4" aria-hidden />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              variant="destructive"
-                              onSelect={() =>
-                                setExcludeDialog({
-                                  title: `Исключить из «${s.building_type_name}»?`,
-                                  scale: excludeScaleForStandard(s),
-                                  body: {
-                                    scope: "standard",
-                                    building_type_id: s.building_type_id,
-                                  },
-                                })
-                              }
-                            >
-                              Исключить из стандарта
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </AccordionPrimitive.Header>
-                    <WhereAllowedContent
-                      editMode={editMode}
-                      className="mr-5 ml-8 border-l border-border pl-4"
-                    >
-                      <div className="divide-y divide-border/60">
-                        {s.positions.map((p) => {
-                          const presentSegmentIds = new Set(
-                            p.chips.map((c) => c.segment_id)
-                          )
-                          return (
-                            <div
-                              key={p.position_id}
-                              className="flex flex-wrap items-center gap-x-2 gap-y-1.5 py-2"
-                            >
-                              <span className="flex-1 text-[15px] tracking-tight text-foreground">
-                                {(() => {
-                                  const { head, qualifier } = splitQualifier(
-                                    p.position_name
-                                  )
-                                  return (
-                                    <>
-                                      {head}
-                                      {qualifier && (
-                                        <span className="text-[13px] text-muted-foreground">
-                                          {" "}
-                                          ({qualifier})
-                                        </span>
-                                      )}
-                                    </>
-                                  )
-                                })()}
-                              </span>
-                              {editMode && (
-                                <button
-                                  type="button"
-                                  aria-label={`исключить из позиции ${p.position_name}`}
-                                  onClick={() =>
-                                    setExcludeDialog({
-                                      title: `Исключить «${splitQualifier(p.position_name).head}» из «${s.building_type_name}»?`,
-                                      scale: excludeScaleForPosition(p),
-                                      body: {
-                                        scope: "position",
-                                        position_id: p.position_id,
-                                        building_type_id: s.building_type_id,
-                                      },
-                                    })
-                                  }
-                                  className="shrink-0 text-muted-foreground hover:text-destructive"
-                                >
-                                  <CircleMinus className="size-4" aria-hidden />
-                                </button>
-                              )}
-                              {!editMode && isAllClasses(p, s.segment_count) ? (
-                                <span className="flex items-center gap-1 text-caption text-muted-foreground">
-                                  <CheckCheck
-                                    className="size-3.5 text-mint"
-                                    aria-hidden
-                                  />
-                                  все классы
-                                </span>
-                              ) : (
-                                <div className="flex w-full flex-wrap items-center gap-1.5">
-                                  {p.chips.map((c) =>
-                                    c.state === "allowed" ? (
-                                      <span
-                                        key={c.segment_id}
-                                        className="inline-flex items-center gap-1"
-                                      >
-                                        <Badge
-                                          variant="outline"
-                                          className="bg-accent text-[11px] font-normal text-muted-foreground"
-                                        >
-                                          {c.segment_name}
-                                        </Badge>
-                                        {editMode && (
-                                          <button
-                                            type="button"
-                                            aria-label={`исключить класс ${c.segment_name}`}
-                                            onClick={() => {
-                                              void confirmExclude({
-                                                scope: "class",
-                                                position_id: p.position_id,
-                                                segment_id: c.segment_id,
-                                              })
-                                            }}
-                                            className="text-muted-foreground hover:text-destructive"
-                                          >
-                                            <X className="size-3" />
-                                          </button>
-                                        )}
-                                      </span>
-                                    ) : (
-                                      <span
-                                        key={c.segment_id}
-                                        className="inline-flex items-center gap-1.5"
-                                      >
-                                        <Badge
-                                          variant="outline"
-                                          className="border-dashed border-border-strong text-[11px] font-normal text-muted-foreground line-through"
-                                          title={excludedTooltip(
-                                            c.release_label
-                                          )}
-                                          aria-label={excludedTooltip(
-                                            c.release_label
-                                          )}
-                                        >
-                                          {c.segment_name}
-                                        </Badge>
-                                        {editMode && (
-                                          <button
-                                            type="button"
-                                            aria-label={`вернуть ${c.segment_name}`}
-                                            onClick={() =>
-                                              restoreListing.mutate(
-                                                {
-                                                  position_id: p.position_id,
-                                                  segment_id: c.segment_id,
-                                                },
-                                                {
-                                                  onError: () =>
-                                                    toast(
-                                                      "Не удалось вернуть — попробуйте ещё раз"
-                                                    ),
-                                                }
-                                              )
-                                            }
-                                            className="text-caption text-primary hover:underline"
-                                          >
-                                            вернуть
-                                          </button>
-                                        )}
-                                      </span>
-                                    )
-                                  )}
-                                  {editMode && (
-                                    <AddClassPopover
-                                      buildingTypeId={s.building_type_id}
-                                      presentSegmentIds={presentSegmentIds}
-                                      pending={addListings.isPending}
-                                      onAdd={(segmentIds) =>
-                                        addListings.mutate(
-                                          {
-                                            position_id: p.position_id,
-                                            segment_ids: segmentIds,
-                                          },
-                                          {
-                                            onError: () =>
-                                              toast(
-                                                "Не удалось добавить класс — попробуйте ещё раз"
-                                              ),
-                                          }
-                                        )
-                                      }
-                                    />
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </WhereAllowedContent>
-                  </AccordionItem>
-                )
-              })}
+              {standards.map((s) => (
+                <WhereAllowedStandard
+                  key={s.building_type_id}
+                  standard={s}
+                  editMode={editMode}
+                  // Раскрыт = не в списке явно свёрнутых (та же производная, что и
+                  // value аккордеона). Гейтит запрос сегментов для свёрнутых.
+                  isOpen={!collapsed.includes(String(s.building_type_id))}
+                  addPending={addListings.isPending}
+                  onExcludeStandard={onExcludeStandard}
+                  onExcludePosition={onExcludePosition}
+                  onExcludeClass={onExcludeClass}
+                  onRestore={onRestore}
+                  onAddClasses={onAddClasses}
+                />
+              ))}
             </Accordion>
             {editMode && plusStandardEl}
             {hasExcludedChips(standards) ? (
