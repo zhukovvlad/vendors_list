@@ -4,6 +4,7 @@ import { Star } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { splitQualifier } from "@/lib/qualifier"
 import type { components } from "@/api/schema"
 
 import { cellFor, type MatrixCell, type MatrixRow } from "./model"
@@ -62,18 +63,42 @@ export function buildColumnDefs(
   const positionCol = ch.display({
     id: "position",
     header: "Позиция",
-    cell: ({ row }) => (
-      <span className="font-medium">{row.original.position_name}</span>
-    ),
+    cell: ({ row }) => {
+      const { head, qualifier } = splitQualifier(row.original.position_name)
+      return (
+        <span className="font-medium leading-tight">
+          {head}
+          {qualifier && (
+            <span className="block text-caption font-normal text-muted-foreground">
+              {qualifier}
+            </span>
+          )}
+        </span>
+      )
+    },
+    meta: {
+      // group-hover: подсветка липкой ячейки вместе со строкой (её opaque bg-card
+      // маскирует hover:bg-muted/50 строки — нужен собственный group-hover).
+      className:
+        "sticky left-0 z-[2] min-w-[220px] bg-card border-r border-border group-hover:bg-muted/50",
+      headerClassName: "sticky left-0 z-[4] bg-muted border-r border-border",
+    },
   }) as ColumnDef<MatrixRow, unknown>
 
-  const segCols = columns.flatMap((grp) => {
+  const segCols = columns.flatMap((grp, gi) => {
+    // Левый разделитель — МЕЖДУ группами; у первой группы не рисуем, иначе двойная
+    // линия вплотную к border-r липкой «Позиции».
+    const border = gi > 0 ? "border-l border-border" : undefined
     const leaves = grp.segments.map(
-      (s) =>
+      (s, idx) =>
         ch.display({
           id: String(s.id),
           header: s.name,
           cell: ({ row }) => renderCell(cellFor(row.original, s.id)),
+          meta:
+            idx === 0 && border
+              ? { className: border, headerClassName: border }
+              : undefined,
         }) as ColumnDef<MatrixRow, unknown>
     )
     if (!grp.group) return leaves
@@ -82,6 +107,7 @@ export function buildColumnDefs(
         id: `g${grp.group.id}`,
         header: grp.group.name,
         columns: leaves,
+        meta: { headerClassName: cn(border, "text-center") },
       }) as ColumnDef<MatrixRow, unknown>,
     ]
   })
