@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router"
 import { Star } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 import type { components } from "@/api/schema"
 
 import { cellFor, type MatrixCell, type MatrixRow } from "./model"
@@ -10,7 +11,7 @@ import { cellFor, type MatrixCell, type MatrixRow } from "./model"
 type MatrixColumnGroup = components["schemas"]["MatrixColumnGroup"]
 
 export function renderCell(cell: MatrixCell | null) {
-  if (!cell) return <span className="text-muted-foreground">—</span>
+  if (!cell) return <span className="text-muted-foreground/60">—</span>
   if (cell.vendors.length > 0) {
     return (
       <div className="flex flex-wrap gap-1">
@@ -19,24 +20,30 @@ export function renderCell(cell: MatrixCell | null) {
             key={v.vendor_id}
             to="/vendors/$vendorId"
             params={{ vendorId: String(v.vendor_id) }}
-            className="rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
-            <Badge
-              variant="outline"
+            <span
               title={v.note ?? undefined}
-              className="cursor-pointer hover:border-foreground/40 hover:bg-accent"
+              className={cn(
+                "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-caption whitespace-nowrap transition-colors",
+                v.starred
+                  ? "border-chart-2/40 bg-chart-2/10 text-foreground hover:border-chart-2/60"
+                  : "border-border-strong bg-card text-foreground hover:bg-accent"
+              )}
             >
               {v.starred && (
                 <Star
-                  className="size-3 fill-current"
+                  className="size-3 fill-current text-chart-2"
                   aria-label="действующее соглашение"
                 />
               )}
               {v.name}
               {v.ujin_integration && (
-                <span className="text-caption text-muted-foreground">Ujin</span>
+                <span className="ml-0.5 border-l border-border-strong pl-1 text-[10px] tracking-wide text-muted-foreground">
+                  Ujin
+                </span>
               )}
-            </Badge>
+            </span>
           </Link>
         ))}
       </div>
@@ -44,7 +51,7 @@ export function renderCell(cell: MatrixCell | null) {
   }
   if (cell.spec_text)
     return <Badge variant="requirement">{cell.spec_text}</Badge>
-  return <span className="text-muted-foreground">—</span>
+  return <span className="text-muted-foreground/60">—</span>
 }
 
 const ch = createColumnHelper<MatrixRow>()
