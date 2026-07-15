@@ -1,3 +1,5 @@
+import type { RowData } from "@tanstack/react-table"
+
 import type { components } from "@/api/schema"
 
 export type MatrixRow = components["schemas"]["MatrixRow"]
@@ -32,4 +34,14 @@ export function withSectionHeaders(items: MatrixRow[]): DisplayRow[] {
 
 export function cellFor(row: MatrixRow, segmentId: number): MatrixCell | null {
   return row.cells.find((c) => c.segment_id === segmentId) ?? null
+}
+
+// Разрешаем per-column CSS-классы через meta (sticky-колонка, разделители групп).
+// TanStack не типизирует meta по умолчанию — расширяем интерфейс.
+declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData extends RowData, TValue> {
+    className?: string
+    headerClassName?: string
+  }
 }

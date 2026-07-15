@@ -1,0 +1,368 @@
+<title>Матрица — рестайл (мокап)</title>
+<style>
+  /* ============ Tokens (из frontend/src/index.css, адаптировано) ============ */
+  :root {
+    --background: #F4F2FA;
+    --foreground: #17131F;
+    --card: #FFFFFF;
+    --muted: #ECEAF4;
+    --muted-2: #E7E4F1;        /* чуть плотнее muted — для sunken-шапки */
+    --muted-foreground: #56526B;
+    --border: #E4E1EE;
+    --border-strong: #CFCADF;
+    --primary: #754AE8;
+    --primary-soft: rgba(117,74,232,0.10);
+    --agree: #158173;          /* mint deep — соглашение (light) */
+    --agree-soft: rgba(21,129,115,0.12);
+    --requirement: #9A6636;    /* tan/brown — требование */
+    --requirement-soft: rgba(154,102,54,0.12);
+    --row-hover: rgba(117,74,232,0.045);
+    --section-bg: #EEEBF6;
+    --shadow-sticky: 6px 0 12px -8px rgba(23,19,31,0.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: #0A0814;
+      --foreground: #F4F2FA;
+      --card: #16121F;
+      --muted: #110D1C;
+      --muted-2: #1B1629;
+      --muted-foreground: #B5B2C4;
+      --border: #2A2640;
+      --border-strong: #3A3556;
+      --primary: #8B66F0;
+      --primary-soft: rgba(139,102,240,0.16);
+      --agree: #82D6CC;
+      --agree-soft: rgba(130,214,204,0.14);
+      --requirement: #BD9375;
+      --requirement-soft: rgba(189,147,117,0.16);
+      --row-hover: rgba(139,102,240,0.07);
+      --section-bg: #14101F;
+      --shadow-sticky: 6px 0 14px -8px rgba(0,0,0,0.6);
+    }
+  }
+  :root[data-theme="light"] {
+    --background: #F4F2FA; --foreground: #17131F; --card: #FFFFFF; --muted: #ECEAF4;
+    --muted-2: #E7E4F1; --muted-foreground: #56526B; --border: #E4E1EE; --border-strong: #CFCADF;
+    --primary: #754AE8; --primary-soft: rgba(117,74,232,0.10); --agree: #158173;
+    --agree-soft: rgba(21,129,115,0.12); --requirement: #9A6636; --requirement-soft: rgba(154,102,54,0.12);
+    --row-hover: rgba(117,74,232,0.045); --section-bg: #EEEBF6; --shadow-sticky: 6px 0 12px -8px rgba(23,19,31,0.18);
+  }
+  :root[data-theme="dark"] {
+    --background: #0A0814; --foreground: #F4F2FA; --card: #16121F; --muted: #110D1C;
+    --muted-2: #1B1629; --muted-foreground: #B5B2C4; --border: #2A2640; --border-strong: #3A3556;
+    --primary: #8B66F0; --primary-soft: rgba(139,102,240,0.16); --agree: #82D6CC;
+    --agree-soft: rgba(130,214,204,0.14); --requirement: #BD9375; --requirement-soft: rgba(189,147,117,0.16);
+    --row-hover: rgba(139,102,240,0.07); --section-bg: #14101F; --shadow-sticky: 6px 0 14px -8px rgba(0,0,0,0.6);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: "Suisse Intl", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1180px; margin: 0 auto; padding: 28px 24px 64px; }
+
+  /* ---- Заголовок экрана ---- */
+  .crumbs { font-size: 12px; color: var(--muted-foreground); letter-spacing: .01em; margin-bottom: 10px; }
+  .crumbs b { color: var(--foreground); font-weight: 500; }
+  .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+  h1 { font-size: 26px; line-height: 1.15; margin: 0; letter-spacing: -0.02em; font-weight: 600; text-wrap: balance; }
+  .sub { color: var(--muted-foreground); font-size: 14px; margin: 6px 0 0; }
+  .theme-toggle {
+    font: inherit; font-size: 13px; color: var(--muted-foreground);
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+  }
+  .theme-toggle:hover { border-color: var(--border-strong); color: var(--foreground); }
+
+  /* ---- Тулбар (фильтры) ---- */
+  .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 20px 0 14px; }
+  .pillset { display: inline-flex; background: var(--muted); border: 1px solid var(--border); border-radius: 9px; padding: 3px; gap: 2px; }
+  .pill { font-size: 13px; padding: 6px 13px; border-radius: 7px; color: var(--muted-foreground); cursor: pointer; white-space: nowrap; border: 0; background: transparent; font-family: inherit; }
+  .pill[aria-pressed="true"] { background: var(--card); color: var(--foreground); box-shadow: 0 1px 2px rgba(23,19,31,.08); font-weight: 500; }
+  .search {
+    flex: 1; min-width: 180px; max-width: 320px; display: flex; align-items: center; gap: 8px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--muted-foreground); font-size: 13px;
+  }
+  .mode-note { margin-left: auto; font-size: 12px; color: var(--muted-foreground); display: inline-flex; align-items: center; gap: 6px; }
+  .mode-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--agree); }
+
+  /* ============ Матрица ============ */
+  .matrix-shell {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(23,19,31,.05);
+  }
+  .scroll { overflow-x: auto; }
+
+  table.matrix { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 860px; }
+  table.matrix th, table.matrix td { text-align: left; vertical-align: top; }
+
+  /* -- Шапка: полоса групп + полоса листьев (sunken) -- */
+  thead th {
+    position: sticky; top: 0; z-index: 3;
+    background: var(--muted-2);
+  }
+  .grp-band th {
+    padding: 8px 10px 4px;
+    font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted-foreground);
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+  }
+  .grp-band th.grp { border-left: 1px solid var(--border); }
+  .leaf-band th {
+    top: 33px;
+    padding: 6px 12px 9px;
+    font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted-foreground);
+    border-bottom: 1px solid var(--border-strong);
+    white-space: nowrap;
+  }
+  .leaf-band th.num { text-align: center; }
+  .leaf-band th.grp-start { border-left: 1px solid var(--border); }
+
+  /* -- Липкая первая колонка (Позиция) -- */
+  .col-pos {
+    position: sticky; left: 0; z-index: 2;
+    background: var(--card);
+    min-width: 236px; max-width: 236px;
+    box-shadow: var(--shadow-sticky);
+  }
+  thead .col-pos { z-index: 4; background: var(--muted-2); }
+  .grp-band .col-pos, .leaf-band .col-pos {
+    vertical-align: bottom;
+  }
+  .leaf-band .col-pos { padding: 6px 14px 9px; }
+
+  /* -- Строки-разделы -- */
+  tr.section td {
+    position: sticky; left: 0;
+    background: var(--section-bg);
+    padding: 7px 14px;
+    font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--muted-foreground);
+    border-bottom: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+  }
+  tr.section td .path-sep { opacity: .5; margin: 0 6px; }
+
+  /* -- Строки позиций -- */
+  tbody tr.pos { border-bottom: 1px solid var(--border); }
+  tbody tr.pos:hover td { background: var(--row-hover); }
+  tbody tr.pos:hover .col-pos { background: color-mix(in srgb, var(--card) 92%, var(--primary) 8%); }
+  tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  tbody td.cell { border-left: 1px solid transparent; }
+  tbody td.grp-start { border-left: 1px solid var(--border); }
+
+  .pos-name { font-weight: 500; font-size: 14px; line-height: 1.3; }
+  .pos-qual { display: block; font-weight: 400; font-size: 12px; color: var(--muted-foreground); margin-top: 1px; }
+
+  /* -- Чипы вендоров -- */
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12.5px; line-height: 1;
+    padding: 4px 8px; border-radius: 6px;
+    border: 1px solid var(--border-strong);
+    background: var(--card); color: var(--foreground);
+    white-space: nowrap;
+  }
+  .chip.agree { border-color: color-mix(in srgb, var(--agree) 40%, var(--border-strong)); background: var(--agree-soft); }
+  .chip .star { color: var(--agree); font-size: 11px; }
+  .chip .ujin { font-size: 10px; letter-spacing: .04em; color: var(--muted-foreground); border-left: 1px solid var(--border-strong); padding-left: 4px; margin-left: 1px; }
+  .req {
+    display: inline-flex; align-items: center; font-size: 12px; line-height: 1.25;
+    padding: 4px 8px; border-radius: 6px;
+    background: var(--requirement-soft);
+    color: var(--requirement);
+    border: 1px solid color-mix(in srgb, var(--requirement) 32%, transparent);
+    max-width: 200px;
+  }
+  .dash { color: var(--muted-foreground); opacity: .55; padding-left: 4px; }
+
+  /* -- Футер-итог -- */
+  tfoot td {
+    position: sticky; bottom: 0; z-index: 2;
+    background: var(--muted-2);
+    border-top: 1px solid var(--border-strong);
+    padding: 10px 12px;
+    font-size: 12.5px; color: var(--muted-foreground);
+  }
+  tfoot td.col-pos { z-index: 3; background: var(--muted-2); font-weight: 600; color: var(--foreground); }
+  tfoot .tot { font-variant-numeric: tabular-nums; color: var(--foreground); font-weight: 600; }
+
+  /* -- Легенда -- */
+  .legend { display: flex; flex-wrap: wrap; gap: 16px 22px; margin-top: 16px; font-size: 12.5px; color: var(--muted-foreground); }
+  .legend .item { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 22px; height: 16px; border-radius: 5px; border: 1px solid var(--border-strong); display: inline-flex; align-items:center; justify-content:center; }
+  .swatch.agree { background: var(--agree-soft); border-color: color-mix(in srgb, var(--agree) 40%, var(--border-strong)); }
+  .swatch.req { background: var(--requirement-soft); border-color: color-mix(in srgb, var(--requirement) 32%, transparent); }
+  .swatch .star { color: var(--agree); font-size: 10px; }
+
+  .note {
+    margin-top: 24px; padding: 14px 16px; border: 1px dashed var(--border-strong); border-radius: 10px;
+    background: var(--muted); font-size: 13px; color: var(--muted-foreground); line-height: 1.55;
+  }
+  .note b { color: var(--foreground); font-weight: 600; }
+  .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+</style>
+
+<div class="page">
+  <div class="crumbs">Обзор <span style="opacity:.5">›</span> <b>Каталог стандартов</b></div>
+  <div class="head">
+    <div>
+      <h1>Каталог стандартов</h1>
+      <p class="sub">Какие вендоры допущены в каком классе объекта. Тип объекта — офисные здания.</p>
+    </div>
+    <button class="theme-toggle" id="themeBtn" type="button">◐ Сменить тему</button>
+  </div>
+
+  <div class="toolbar">
+    <div class="pillset" role="group" aria-label="Тип объекта">
+      <button class="pill" aria-pressed="true" type="button">Офисные здания</button>
+      <button class="pill" aria-pressed="false" type="button">Жильё</button>
+      <button class="pill" aria-pressed="false" type="button">Социальные объекты</button>
+    </div>
+    <div class="search"><span>⌕</span> Поиск по позиции или разделу…</div>
+    <span class="mode-note"><span class="mode-dot"></span> режим: просмотр</span>
+  </div>
+
+  <div class="matrix-shell">
+    <div class="scroll">
+      <table class="matrix">
+        <thead>
+          <tr class="grp-band">
+            <th class="col-pos" rowspan="2">Позиция</th>
+            <th class="grp grp-start" colspan="3">Офисные здания</th>
+            <th class="grp" colspan="2">ТРЦ</th>
+          </tr>
+          <tr class="leaf-band">
+            <th class="grp-start">Класс A</th>
+            <th>Класс B</th>
+            <th>Класс C</th>
+            <th class="grp-start">Стандарт</th>
+            <th>Премиум</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <!-- Раздел 1 -->
+          <tr class="section"><td colspan="6">Инженерные системы <span class="path-sep">›</span> Вентиляция и кондиционирование</td></tr>
+
+          <tr class="pos">
+            <td class="col-pos"><span class="pos-name">Насосы <span class="pos-qual">EC двигатель</span></span></td>
+            <td class="cell grp-start">
+              <div class="chips">
+                <span class="chip agree"><span class="star">★</span>Grundfos</span>
+                <span class="chip">Wilo</span>
+              </div>
+            </td>
+            <td class="cell">
+              <div class="chips"><span class="chip agree"><span class="star">★</span>Grundfos</span></div>
+            </td>
+            <td class="cell"><div class="chips"><span class="chip">Wilo</span></div></td>
+            <td class="cell grp-start"><span class="dash">—</span></td>
+            <td class="cell"><div class="chips"><span class="chip agree"><span class="star">★</span>Grundfos</span></div></td>
+          </tr>
+
+          <tr class="pos">
+            <td class="col-pos"><span class="pos-name">Приточные установки</span></td>
+            <td class="cell grp-start">
+              <div class="chips">
+                <span class="chip">Systemair</span>
+                <span class="chip agree"><span class="star">★</span>Daikin<span class="ujin">Ujin</span></span>
+              </div>
+            </td>
+            <td class="cell"><div class="chips"><span class="chip">Systemair</span></div></td>
+            <td class="cell"><div class="chips"><span class="chip">Systemair</span></div></td>
+            <td class="cell grp-start"><div class="chips"><span class="chip">VTS</span></div></td>
+            <td class="cell"><div class="chips"><span class="chip agree"><span class="star">★</span>Daikin<span class="ujin">Ujin</span></span></div></td>
+          </tr>
+
+          <tr class="pos">
+            <td class="col-pos"><span class="pos-name">Чиллеры <span class="pos-qual">воздушное охлаждение</span></span></td>
+            <td class="cell grp-start"><span class="req">по проекту, ≥ IPLV 6.0</span></td>
+            <td class="cell"><span class="req">по проекту, ≥ IPLV 6.0</span></td>
+            <td class="cell"><span class="dash">—</span></td>
+            <td class="cell grp-start"><span class="dash">—</span></td>
+            <td class="cell"><div class="chips"><span class="chip">Carrier</span><span class="chip">Trane</span></div></td>
+          </tr>
+
+          <!-- Раздел 2 -->
+          <tr class="section"><td colspan="6">Инженерные системы <span class="path-sep">›</span> Электроснабжение</td></tr>
+
+          <tr class="pos">
+            <td class="col-pos"><span class="pos-name">Щиты ВРУ</span></td>
+            <td class="cell grp-start"><div class="chips"><span class="chip agree"><span class="star">★</span>Schneider</span><span class="chip">ABB</span></div></td>
+            <td class="cell"><div class="chips"><span class="chip agree"><span class="star">★</span>Schneider</span></div></td>
+            <td class="cell"><div class="chips"><span class="chip">ABB</span><span class="chip">IEK</span></div></td>
+            <td class="cell grp-start"><div class="chips"><span class="chip">ABB</span></div></td>
+            <td class="cell"><div class="chips"><span class="chip agree"><span class="star">★</span>Schneider</span></div></td>
+          </tr>
+
+          <tr class="pos">
+            <td class="col-pos"><span class="pos-name">Источники бесперебойного питания</span></td>
+            <td class="cell grp-start"><div class="chips"><span class="chip">Eaton</span></div></td>
+            <td class="cell"><span class="dash">—</span></td>
+            <td class="cell"><span class="dash">—</span></td>
+            <td class="cell grp-start"><span class="req">не требуется</span></td>
+            <td class="cell"><div class="chips"><span class="chip">Eaton</span><span class="chip">APC</span></div></td>
+          </tr>
+
+          <!-- Раздел 3 -->
+          <tr class="section"><td colspan="6">Слаботочные системы <span class="path-sep">›</span> СКУД</td></tr>
+
+          <tr class="pos">
+            <td class="col-pos"><span class="pos-name">Контроллеры доступа</span></td>
+            <td class="cell grp-start"><div class="chips"><span class="chip agree"><span class="star">★</span>Sigur<span class="ujin">Ujin</span></span></div></td>
+            <td class="cell"><div class="chips"><span class="chip agree"><span class="star">★</span>Sigur<span class="ujin">Ujin</span></span></div></td>
+            <td class="cell"><div class="chips"><span class="chip">Parsec</span></div></td>
+            <td class="cell grp-start"><div class="chips"><span class="chip agree"><span class="star">★</span>Sigur<span class="ujin">Ujin</span></span></div></td>
+            <td class="cell"><div class="chips"><span class="chip agree"><span class="star">★</span>Sigur<span class="ujin">Ujin</span></span></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span class="item"><span class="swatch agree"><span class="star">★</span></span> действующее соглашение</span>
+    <span class="item"><span class="swatch"></span> вендор допущен</span>
+    <span class="item"><span class="swatch req"></span> требование / спец-текст</span>
+    <span class="item"><span style="opacity:.55">—</span> нет допуска</span>
+    <span class="item"><span style="font-size:10px;letter-spacing:.04em;color:var(--muted-foreground);border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px">Ujin</span> интеграция Ujin</span>
+  </div>
+
+  <div class="note">
+    <b>Что показывает мокап.</b> Тот же pivot (позиции × классы), пересобранный в языке <b>ReviewItemsTable</b>:
+    sunken-шапка с группами колонок, липкая колонка «Позиция», плотные ячейки с чип-языком, строки-разделы.
+    Данные и вендоры — вымышленные. Шрифт — системный (наши <b>Suisse Intl / Grtsk Giga</b> лицензионные,
+    в мокап не встроены), важны раскладка/плотность/цвет.<br><br>
+    <b>Вне этого среза (осознанно).</b> Инлайн-правка прямо в ячейках — отдельная фича уровня §6 (ячейка =
+    множество вендоров, а не скаляр). Здесь режим <span class="kbd">просмотр</span>. Реальные группы/классы приходят
+    из API динамически — фиксированный CSS-grid из образца тут неприменим, потому это стиль поверх TanStack-таблицы.
+  </div>
+</div>
+
+<script>
+  (function () {
+    var btn = document.getElementById("themeBtn");
+    var root = document.documentElement;
+    btn.addEventListener("click", function () {
+      var cur = root.getAttribute("data-theme");
+      if (!cur) {
+        cur = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      root.setAttribute("data-theme", cur === "dark" ? "light" : "dark");
+    });
+  })();
+</script>
