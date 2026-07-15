@@ -25,10 +25,17 @@ import {
  * edit-режим (вариант B фикса клиппинга): в правке секции раскрыты принудительно
  * и контент РАСТЁТ (чипы получают ×, появляются ⊖/«+ класс»). Radix замеряет
  * `--radix-accordion-content-height` в момент открытия — до дорастания, — и
- * `overflow-hidden` режет хвост. Поэтому в edit рендерим без анимации/overflow/
- * фикс-высоты (height auto, overflow visible). В view контент статичен — анимация
- * и клип остаются как в DS. DS-примитив не форкаем (golden-rule: правка на уровне
+ * `overflow-hidden` режет хвост. Поэтому в edit рендерим без анимации/overflow
+ * (height auto, overflow visible). В view контент статичен — анимация и клип
+ * остаются как в DS. DS-примитив не форкаем (golden-rule: правка на уровне
  * экрана, триггер здесь тоже кастомный).
+ *
+ * Внутренний div НЕ пиннится к `h-(--radix-accordion-content-height)` (в отличие
+ * от DS): у нас контент меняет высоту при edit↔view, пока секция раскрыта. Пин
+ * замкнул бы петлю с ResizeObserver'ом Radix — на возврате из edit div остаётся
+ * растянут под БÓЛЬШУЮ (edit) высоту, observer меряет растянутый div, переменная
+ * застревает → лишний отступ снизу. Натуральная высота меряется верно; переменная
+ * нужна лишь keyframe-анимации открытия/закрытия, которая работает и без пина.
  */
 function WhereAllowedContent({
   editMode,
@@ -48,15 +55,7 @@ function WhereAllowedContent({
           "overflow-hidden data-open:animate-accordion-down data-closed:animate-accordion-up"
       )}
     >
-      <div
-        className={cn(
-          "pt-0 pb-2.5",
-          !editMode && "h-(--radix-accordion-content-height)",
-          className
-        )}
-      >
-        {children}
-      </div>
+      <div className={cn("pt-0 pb-2.5", className)}>{children}</div>
     </AccordionPrimitive.Content>
   )
 }
